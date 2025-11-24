@@ -1,1 +1,18 @@
-<p>dashboard works!</p>
+<div class="m-4 mt-0 p-7 flex flex-col flex-1 rounded-lg relative" style="background-color: var(--background-elevated);">
+    <div class="absolute bottom-5 w-full flex items-center justify-center space-x-2">
+        <button matMiniFab class="tooltip-btn abajo">
+            <span class="tooltip-base abajo">Reiniciar</span>
+            <mat-icon [svgIcon]="'arrow-path-rounded-square'"></mat-icon>
+        </button>
+        <button matFab class="tooltip-btn abajo">
+            <span class="tooltip-base abajo">{{textoAccionPlayPause}}</span>
+            <mat-icon [svgIcon]="'play'"></mat-icon>
+        </button>
+        <button matMiniFab class="w-8 tooltip-btn abajo">
+            <span class="tooltip-base abajo">Reiniciar</span>
+            <mat-icon [svgIcon]="'stop'"></mat-icon>
+        </button>
+    </div>
+</div>
+
+

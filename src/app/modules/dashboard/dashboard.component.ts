@@ -1,11 +1,14 @@
 import { Component } from '@angular/core';
+import { MatButtonModule } from '@angular/material/button';
+import { MatIconModule } from '@angular/material/icon';
 
 @Component({
   selector: 'app-dashboard',
-  imports: [],
+  imports: [MatIconModule, MatButtonModule],
+  standalone: true,
   templateUrl: './dashboard.component.html',
   styleUrl: './dashboard.component.scss',
 })
 export class DashboardComponent {
-
+  textoAccionPlayPause: string = 'Iniciar simulación';
 }

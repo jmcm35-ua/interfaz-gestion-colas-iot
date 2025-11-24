@@ -1,1 +1,159 @@
-<p>configuration works!</p>
+<div class="w-full h-full flex flex-col">
+  <!-- Header fijo -->
+  <div class="relative flex items-center w-full h-16 z-50 px-4 bg-gray-800 sticky top-0 border-b">
+    <div class="relative flex items-center">
+      <mat-icon class="text-white" [svgIcon]="'adjustments-vertical'"></mat-icon>
+      <h2 class="text-lg font-bold text-white ml-2">Configuración</h2>
+    </div>
+
+    <div class="flex items-center ml-auto space-x-0.5">
+      <button mat-icon-button [matTooltip]="tooltip || 'Cargar'">
+        <mat-icon [svgIcon]="'arrow-up-on-square'"></mat-icon>
+      </button>
+      <button mat-icon-button [matTooltip]="tooltip || 'Descargar'">
+        <mat-icon [svgIcon]="'arrow-down-on-square'"></mat-icon>
+      </button>
+    </div>
+  </div>
+
+
+    <div class="flex-1 overflow-y-auto px-4">
+        <form class="flex flex-col gap-6">
+            <div class="flex flex-col gap-0">
+                <div class="sticky top-0 bg-gray-800 pt-2 mb-2 z-49 border-b">
+                    <h3 class="text-lg text-white mb-2 font-bold ">IOTBroker</h3>
+                </div>
+                <div class="flex">
+                    <mat-form-field
+                        class="flex-auto fuse-mat-dense conf-input">
+                        <mat-label class="text-sm">Puerto del IOTBroker</mat-label>
+                        <input
+                            matInput
+                            >
+                    </mat-form-field>
+                </div>
+                <div class="flex">
+                    <mat-form-field
+                        class="flex-auto fuse-mat-dense conf-input">
+                        <mat-label class="text-sm text-secondary">Máximo número de mensajes por remesa</mat-label>
+                        <input
+                            matInput
+                            >
+                    </mat-form-field>
+                </div>
+                <div class="flex">
+                    <mat-form-field
+                        class="flex-auto fuse-mat-dense">
+                        <mat-label class="text-sm">Mínimo número de mensajes por remesa</mat-label>
+                        <input
+                            matInput
+                            >
+                    </mat-form-field>
+                </div>
+                <div class="flex flex-col mb-4">
+                    <label class="text-sm font-medium mb-1">Ciclos de día y noche</label>
+
+                    <mat-slide-toggle
+                    [color]="'primary'"
+                    class="mt-0">
+                </mat-slide-toggle>
+                </div>
+                <div class="flex">
+                    <mat-form-field
+                        class="flex-auto fuse-mat-dense">
+                        <mat-label class="text-sm">Factor noche</mat-label>
+                        <input
+                            matInput
+                            >
+                    </mat-form-field>
+                </div>
+                <div class="flex">
+                    <mat-form-field
+                        class="flex-auto fuse-mat-dense">
+                        <mat-label class="text-sm">Tiempo máximo para generar una remesa</mat-label>
+                        <input
+                            matInput
+                            >
+                    </mat-form-field>
+                </div>
+                <div class="flex">
+                    <mat-form-field
+                        class="flex-auto fuse-mat-dense">
+                        <mat-label class="text-sm">Total mensajes a producir</mat-label>
+                        <input
+                            matInput
+                            >
+                    </mat-form-field>
+                </div>
+            </div>
+
+            <mat-divider class="mb-4"></mat-divider>
+
+            <div class="flex flex-col gap-0" >
+                <h3 class="text-lg text-white mb-2 font-bold sticky top-0">IOTBroker</h3>
+                <div class="flex">
+                    <mat-form-field
+                        class="flex-auto fuse-mat-dense conf-input">
+                        <mat-label class="text-sm">Puerto del IOTBroker</mat-label>
+                        <input
+                            matInput
+                            >
+                    </mat-form-field>
+                </div>
+                <div class="flex">
+                    <mat-form-field
+                        class="flex-auto fuse-mat-dense conf-input">
+                        <mat-label class="text-sm">Máximo número de mensajes por remesa</mat-label>
+                        <input
+                            matInput
+                            >
+                    </mat-form-field>
+                </div>
+                <div class="flex">
+                    <mat-form-field
+                        class="flex-auto fuse-mat-dense">
+                        <mat-label class="text-sm">Mínimo número de mensajes por remesa</mat-label>
+                        <input
+                            matInput
+                            >
+                    </mat-form-field>
+                </div>
+                <div class="flex flex-col mb-4">
+                    <label class="text-sm font-medium mb-1">Ciclos de día y noche</label>
+
+                    <mat-slide-toggle
+                    [color]="'primary'"
+                    class="mt-0">
+                </mat-slide-toggle>
+                </div>
+                <div class="flex">
+                    <mat-form-field
+                        class="flex-auto fuse-mat-dense">
+                        <mat-label class="text-sm">Factor noche</mat-label>
+                        <input
+                            matInput
+                            >
+                    </mat-form-field>
+                </div>
+                <div class="flex">
+                    <mat-form-field
+                        class="flex-auto fuse-mat-dense">
+                        <mat-label class="text-sm">Tiempo máximo para generar una remesa</mat-label>
+                        <input
+                            matInput
+                            >
+                    </mat-form-field>
+                </div>
+                <div class="flex">
+                    <mat-form-field
+                        class="flex-auto fuse-mat-dense">
+                        <mat-label class="text-sm">Total mensajes a producir</mat-label>
+                        <input
+                            matInput
+                            >
+                    </mat-form-field>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
