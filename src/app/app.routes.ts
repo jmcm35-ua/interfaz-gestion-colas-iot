@@ -11,8 +11,8 @@ export const appRoutes: Routes = [
             scheme: 'dark'
         },
         children: [
-            { path: '', redirectTo: 'example', pathMatch: 'full' },
-            { path: 'example', component: AppComponent },
+            { path: '', component: AppComponent, pathMatch: 'full' },
         ]
-    }
+    },
+    { path: '**', redirectTo: '', pathMatch: 'full' }
 ];
