@@ -1,0 +1,12 @@
+export interface PriorityQueue{
+    weight: number;
+};
+
+export interface Variables{ // If minimum and maximum are -1, they are ignored
+    name: string;
+    value: number | PriorityQueue[]; 
+    text: string; 
+    minimum: number; 
+    maximum: number; 
+    input: boolean 
+};

@@ -1,18 +1,19 @@
-<div class="m-4 mt-0 p-7 flex flex-col flex-1 rounded-lg relative" style="background-color: var(--background-elevated);">
-    <div class="absolute bottom-5 w-full flex items-center justify-center space-x-2">
-        <button matMiniFab class="tooltip-btn abajo">
-            <span class="tooltip-base abajo">Reiniciar</span>
-            <mat-icon [svgIcon]="'arrow-path-rounded-square'"></mat-icon>
+<div class="flex flex-col h-full w-full bg-transparent">
+    
+
+    <div class="absolute bottom-2 w-full flex items-center justify-center gap-2">
+        <button mat-mini-fab class="tooltip-btn abajo"
+        [matTooltip]="'Reiniciar'">
+            <mat-icon [svgIcon]="'heroicons_solid:arrow-path-rounded-square'"></mat-icon>
         </button>
-        <button matFab class="tooltip-btn abajo">
-            <span class="tooltip-base abajo">{{textoAccionPlayPause}}</span>
-            <mat-icon [svgIcon]="'play'"></mat-icon>
+        <button mat-fab class="tooltip-btn abajo"
+        [matTooltip]="textoAccionPlayPause"
+        [color]="'primary'">
+            <mat-icon [svgIcon]="'heroicons_solid:play'"></mat-icon>
         </button>
-        <button matMiniFab class="w-8 tooltip-btn abajo">
-            <span class="tooltip-base abajo">Reiniciar</span>
-            <mat-icon [svgIcon]="'stop'"></mat-icon>
+        <button mat-mini-fab class="tooltip-btn abajo"
+        [matTooltip]="'Detener'">
+            <mat-icon [svgIcon]="'heroicons_solid:stop'"></mat-icon>
         </button>
     </div>
 </div>
-
-

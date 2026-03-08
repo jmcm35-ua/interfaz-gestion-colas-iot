@@ -73,23 +73,30 @@
                     </div>
                 </div>
                 <!-- Actions -->
-                <div class="flex shrink-0 items-center mt-6 sm:mt-0 sm:ml-4 text-white"> 
+                <div class="flex shrink-0 items-center mt-6 sm:mt-0 sm:ml-4 text-white gap-2"> 
                   <button
                     mat-icon-button
-                    [matTooltip]="tooltip || 'Toggle Fullscreen'"
+                    [matTooltip]="'Gestión de archivos'">
+                    <mat-icon [svgIcon]="'heroicons_solid:archive-box-arrow-down'"></mat-icon>
+                  </button>
+                  <button
+                    mat-icon-button
+                    [matTooltip]="tooltip || 'Configuración'"
                     (click)="matDrawer.toggle()">
-                    <mat-icon [svgIcon]="'bars-3'"></mat-icon>
+                    <mat-icon [svgIcon]="'heroicons_solid:bars-3'"></mat-icon>
                   </button>
                 </div>
             </div>
 
             <!-- Main -->
             <div
-                class="flex-auto p-6 sm:p-10 overflow-y-auto"
+                class="flex-auto p-2 overflow-y-auto flex-1"
                 cdkScrollable>
 
                 <!-- CONTENT GOES HERE -->
-                <div class="h-400 min-h-400 max-h-400 border-2 border-dashed border-gray-300 rounded-2xl"></div>
+                <div class="h-full border-2 border-dashed border-gray-300 rounded-2xl">
+                  <app-dashboard class="h-full flex flex-1"></app-dashboard>
+                </div>
 
             </div>
 
