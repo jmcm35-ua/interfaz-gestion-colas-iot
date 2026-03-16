@@ -1,1 +1,33 @@
-<p>files works!</p>
+
+<!-- Header fijo -->
+<div class="relative flex items-center w-full z-40 py-2 px-4 sticky top-0 border-b">
+    <div class="relative flex items-center">
+        <h2 class="text-lg font-bold text-white">Archivos</h2>
+    </div>
+
+    <div class="flex items-center ml-auto space-x-0.5">
+        <button mat-icon-button [matTooltip]="tooltip || 'Descargar carpeta'">
+            <mat-icon [svgIcon]="'heroicons_solid:folder-arrow-down'"></mat-icon>
+        </button>
+    </div>
+</div>
+
+<div class="container-files">
+    @for (file of files; track $index) {
+        <div class = "file border">
+            <img src="assets/icons/csv.png" alt="Icono CSV">
+            <span>files.name</span>
+            
+            <button 
+                mat-icon-button 
+                class="w-7 h-7 min-w-7 min-h-7 p-0 flex items-center justify-center overflow-hidden"
+                style="line-height: 1; min-width: 28px !important; height: 28px !important;"
+                [matTooltip]="'Descargar'">
+                <mat-icon 
+                    class="icon-size-4 m-0" 
+                    [svgIcon]="'heroicons_solid:arrow-down-tray'">
+                </mat-icon>
+            </button>
+        </div>
+    }
+</div>

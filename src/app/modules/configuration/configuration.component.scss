@@ -1,21 +1,21 @@
 :host ::ng-deep .mat-mdc-form-field-bottom-align {
-    display: none !important;
-    height: 0 !important;
-    margin: 0 !important;
-    padding: 0 !important;
+  display: none !important;
+  height: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
 }
 
 
-.selector:hover mat-label{
-    color: white !important;
+.selector:hover mat-label {
+  color: white !important;
 }
 
-.selector:hover input{
-    color: white !important;
+.selector:hover input {
+  color: white !important;
 }
 
 input:focus {
-  color: white !important; 
+  color: white !important;
 }
 
 .selector:focus-within mat-label {
@@ -24,7 +24,7 @@ input:focus {
 
 .content {
   overflow: hidden;
-  transition: all 0.25s ease ;
+  transition: all 0.25s ease;
   max-height: 1500px;
   padding: .5rem 0;
 }
@@ -37,13 +37,13 @@ input:focus {
 .field-hover:hover mat-label,
 .field-hover:hover input,
 .field-hover:hover span {
-    color: white !important;
+  color: white !important;
 }
 
 .field-hover:focus-within mat-label,
 .field-hover:focus-within input,
 .field-hover:focus-within span {
-    color: white !important;
+  color: white !important;
 }
 
 
@@ -53,4 +53,15 @@ input:focus {
 
 .animacion-rotar.izquierda {
   transform: rotate(90deg);
+}
+
+input[type=number]::-webkit-outer-spin-button,
+input[type=number]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+/* Firefox */
+input[type=number] {
+  -moz-appearance: textfield;
 }

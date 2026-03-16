@@ -19,47 +19,45 @@ import { FuseConfirmationService } from '@fuse/services/confirmation/confirmatio
 })
 export class ConfigurationComponent {
   @Output() close: EventEmitter<void> = new EventEmitter<void>();
-  @Input() tooltip: string;
+  @Input() tooltip: string | undefined;
 
   simulationRunning: boolean = true;
 
-  configForm: UntypedFormGroup;
+  configForm: UntypedFormGroup | undefined;
 
-  variablesIotBroker: Variables[] = [ 
-    { name: 'portIotBroker', value: 3000, text: 'Puerto', minimum: 1024, maximum: 65535, input: true},
-    { name: 'maxMensajes', value: 1000, text: 'Máximo de mensajes por remesa', minimum: 1, maximum: 10000, input: true},
-    { name: 'minMensajes', value: 100, text: 'Mínimo de mensajes por remesa', minimum: 1, maximum: 10000, input: true},
-    { name: 'esDia', value: 1, text: 'Ciclos de día y noche', minimum: -1, maximum: -1, input: false},
-    { name: 'factorNoche', value: 0.2, text: 'Factor noche', minimum: 0, maximum: 1, input: true},
-    { name: 'maxTimeToGenerateMsg', value: 1000, text: 'Tiempo máximo para generar una remesa (ms)', minimum: 100, maximum: 10000000, input: true},
-    { name: 'maxPriority', value: [
-      { weight: 0.05 },
-      { weight: 0.20 },
-      { weight: 0.30 },
-      { weight: 0.45 },
-    ], text: 'Prioridad máxima de los mensajes', minimum: 1, maximum: 100, input: true},
-    { name: 'totalMessages', value: 1000000, text: 'Total de mensajes a generar', minimum: 1000, maximum: 100000000, input: true}
+  variablesIotBroker: Variables[] = [
+    { name: 'maxMensajes', value: 1000, text: 'Máximo de mensajes por remesa', minimum: 1, maximum: 10000, input: true },
+    { name: 'minMensajes', value: 100, text: 'Mínimo de mensajes por remesa', minimum: 1, maximum: 10000, input: true },
+    { name: 'esDia', value: 1, text: 'Ciclos de día y noche', minimum: -1, maximum: -1, input: false },
+    { name: 'factorNoche', value: 0.2, text: 'Factor noche', minimum: 0, maximum: 1, input: true },
+    { name: 'maxTimeToGenerateMsg', value: 1000, text: 'Tiempo máximo para generar una remesa (ms)', minimum: 100, maximum: 10000000, input: true },
+    {
+      name: 'maxPriority', value: [
+        { weight: 0.05 },
+        { weight: 0.20 },
+        { weight: 0.30 },
+        { weight: 0.45 },
+      ], text: 'Prioridad máxima de los mensajes', minimum: 1, maximum: 100, input: true
+    },
+    { name: 'totalMessages', value: 1000000, text: 'Total de mensajes a generar', minimum: 1000, maximum: 100000000, input: true }
   ]
 
   variablesCategoriser: Variables[] = [
-    { name: 'portCategoriser', value: 3100, text: 'Puerto', minimum: 1024, maximum: 65535, input: true},
-    { name: 'expirationVerifiction', value: 1000, text: 'Verificación de expiración (ms)', minimum: 100, maximum: 10000000, input: true},
-    { name: 'expirationMaxQueueMsg', value: -1, text: 'Máximo número de mensajes en cola', minimum: -1, maximum: 1000000, input: true},
-    { name: 'num_messages', value: 1000, text: 'Mensajes a solicitar del IoT Broker', minimum: 1, maximum: 1000000, input: true},
-    { name: 'timeToReadIotBroker', value: 500, text: 'Tiempo a esperar entre lecturas (ms)', minimum: 100, maximum: 10000000, input: true}
+    { name: 'expirationVerifiction', value: 1000, text: 'Verificación de expiración (ms)', minimum: 100, maximum: 10000000, input: true },
+    { name: 'expirationMaxQueueMsg', value: -1, text: 'Máximo número de mensajes en cola', minimum: -1, maximum: 1000000, input: true },
+    { name: 'num_messages', value: 1000, text: 'Mensajes a solicitar del IoT Broker', minimum: 1, maximum: 1000000, input: true },
+    { name: 'timeToReadIotBroker', value: 500, text: 'Tiempo a esperar entre lecturas (ms)', minimum: 100, maximum: 10000000, input: true }
   ]
 
   variablesDispatcher: Variables[] = [
-    { name: 'portDispatcher', value: 3200, text: 'Puerto', minimum: 1024, maximum: 65535, input: true},
-    { name: 'maxSortQueue', value: -1, text: 'Número de colas priorizadas', minimum: -1, maximum: 20, input: true},
-    { name: 'numMessages', value: 1000, text: 'Mensajes a solicitar del Categoriser', minimum: 1, maximum: 1000000, input: true},
-    { name: 'tiempoLectura', value: 1000, text: 'Tiempo a esperar entre lecturas (ms)', minimum: 100, maximum: 10000000, input: true},
+    { name: 'maxSortQueue', value: -1, text: 'Número de colas priorizadas', minimum: -1, maximum: 20, input: true },
+    { name: 'numMessages', value: 1000, text: 'Mensajes a solicitar del Categoriser', minimum: 1, maximum: 1000000, input: true },
+    { name: 'tiempoLectura', value: 1000, text: 'Tiempo a esperar entre lecturas (ms)', minimum: 100, maximum: 10000000, input: true },
   ]
 
   variablesConsumer: Variables[] = [
-    { name: 'portConsumer', value: 3300, text: 'Puerto', minimum: 1024, maximum: 65535, input: true},
-    { name: 'num', value: 1000, text: 'Mensajes que se sirven al sistema', minimum: 1, maximum: 1000000, input: true},
-    { name: 'timeLectura', value: 1000, text: 'Tiempo a esperar entre lecturas (ms)', minimum: 100, maximum: 10000000, input: true},
+    { name: 'num', value: 1000, text: 'Mensajes que se sirven al sistema', minimum: 1, maximum: 1000000, input: true },
+    { name: 'timeLectura', value: 1000, text: 'Tiempo a esperar entre lecturas (ms)', minimum: 100, maximum: 10000000, input: true },
   ]
 
   isOpen = {
@@ -69,11 +67,11 @@ export class ConfigurationComponent {
     consumer: true
   };
 
-  constructor(private _fuseConfirmationService: FuseConfirmationService) {}
-  
+  constructor(private _fuseConfirmationService: FuseConfirmationService) { }
+
   closePanel() {
     console.log("Closing panel");
-    this.close.emit(); 
+    this.close.emit();
   }
 
   isNumber(value: any): boolean {
@@ -97,7 +95,7 @@ export class ConfigurationComponent {
       return;
     }
     const queues = maxPriorityVar.value as PriorityQueue[];
-    
+
     while (queues.length < count) {
       queues.push({ weight: 0.01 });
     }
@@ -118,20 +116,20 @@ export class ConfigurationComponent {
     const queues = maxPriorityVar.value as PriorityQueue[];
 
     this.totalWeight = queues
-    .map(q => Number(this.onWeightValue(q.weight)))
-    .reduce((a, b) => a + b, 0);
+      .map(q => Number(this.onWeightValue(q.weight)))
+      .reduce((a, b) => a + b, 0);
   }
 
   weightPercent(i: number) {
     const maxPriorityVar = this.variablesIotBroker.find(v => v.name === 'maxPriority');
-    const queues = maxPriorityVar.value as PriorityQueue[];
+    const queues = maxPriorityVar?.value as PriorityQueue[];
 
     return queues[i].weight * 100;
   }
 
   setWeightPercent(i: number, value: number) {
     const maxPriorityVar = this.variablesIotBroker.find(v => v.name === 'maxPriority');
-    const queues = maxPriorityVar.value as PriorityQueue[];
+    const queues = maxPriorityVar?.value as PriorityQueue[];
     queues[i].weight = value / 100;
   }
 
@@ -152,14 +150,12 @@ export class ConfigurationComponent {
 
     if (isNaN(value) || value < 1) {
       queues[index].weight = 0.01;
-    } else if(value > 100){
+    } else if (value > 100) {
       queues[index].weight = 1;
-    }else{
+    } else {
       queues[index].weight = Math.round((value / 100) * 10000) / 10000;
     }
 
-
-    console.log(this.variablesIotBroker.find(v => v.name === 'maxPriority').value);
     this.updateTotal();
   }
 
@@ -186,26 +182,26 @@ export class ConfigurationComponent {
     const maximo = variable.maximum ?? -1;
 
     let nuevoValor = 0;
-    if(minimo !== -99 && valor < minimo){
+    if (minimo !== -99 && valor < minimo) {
       nuevoValor = minimo;
-    }else if(maximo !== -99 && valor > maximo){
+    } else if (maximo !== -99 && valor > maximo) {
       nuevoValor = maximo;
-    }else{
+    } else {
       nuevoValor = valor;
     }
-    
+
     variable.value = nuevoValor;
   }
 
   extractValues(variables: Variables[]): any {
-    const result: {name: string, value: any}[] = [];
+    const result: { name: string, value: any }[] = [];
     variables.forEach(variable => {
-      result.push({name: variable.name, value: variable.value});
+      result.push({ name: variable.name, value: variable.value });
     });
     return result;
   }
 
-  async downloadJSON(){
+  async downloadJSON() {
 
 
     const data = [
@@ -245,7 +241,7 @@ export class ConfigurationComponent {
     await writable.close();
   }
 
-  
+
   draggingFile = false;
 
   onDragOver(event: DragEvent) {
@@ -273,16 +269,16 @@ export class ConfigurationComponent {
     if (event.dataTransfer?.files?.length) {
       file = event.dataTransfer.files[0];
     } else if (event.target?.files?.length) {
-        file = event.target.files[0];
-        event.target.value = '';
+      file = event.target.files[0];
+      event.target.value = '';
     }
-    
-    if (!file.name.endsWith('.json')) {
+
+    if (!file?.name.endsWith('.json')) {
       alert("Solo se permiten archivos JSON");
       return;
     }
 
-    if(this.simulationRunning){ // Si la simulación está en marcha, pedir confirmación. 
+    if (this.simulationRunning) { // Si la simulación está en marcha, pedir confirmación. 
       const dialogRef = this._fuseConfirmationService.open({
         "title": "Importar configuración",
         "message": "¿Estás seguro de que quieres importar la nueva configuración? <span class=\"font-medium\">¡Esta acción no se puede deshacer!</span>",
@@ -306,8 +302,8 @@ export class ConfigurationComponent {
       }).afterClosed().subscribe((result) => {
         if (result === 'confirmed') {
           this.loadJSON(file);
-        }else{
-          return; 
+        } else {
+          return;
         }
       });
     }
@@ -337,11 +333,13 @@ export class ConfigurationComponent {
 
           section.variables.forEach((varFromFile: any) => {
             const variable = sectionVariables.find(v => v.name === varFromFile.name);
-            if(variable.name==='maxPriority'){
+            if (!variable) return;
+
+            if (variable.name === 'maxPriority') {
               // Esta logica hay que moverla a una función aparte porque se repite y realizar una comprobacion de que todos los valores sumen 1
               variable.value = varFromFile.value;
               this.updateTotal();
-            }else{
+            } else {
               this.comprobarValor(varFromFile.value, variable);
             }
           });

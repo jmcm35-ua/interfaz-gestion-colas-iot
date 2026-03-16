@@ -1,0 +1,23 @@
+.container-files {
+    overflow-y: auto;
+    min-height: 50px;
+    max-height: 160px;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5em;
+    padding: 0.5em;
+}
+
+.file {
+    width: 100%;
+    border-radius: 16px;
+    display: grid;
+    grid-template-columns: 24px 1fr 28px;
+    align-items: center;
+    padding: 0.5em;
+    gap: 1em;
+}
+
+.file img {
+    width: 24px;
+}
