@@ -28,6 +28,7 @@
         "apexcharts": "3.47.0",
         "crypto-js": "4.2.0",
         "highlight.js": "11.9.0",
+        "jszip": "^3.10.1",
         "lodash-es": "4.17.21",
         "luxon": "3.4.4",
         "ng-apexcharts": "1.9.0",

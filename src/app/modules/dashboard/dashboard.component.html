@@ -7,6 +7,7 @@
             <mat-icon [svgIcon]="'heroicons_solid:arrow-path-rounded-square'"></mat-icon>
         </button>
         <button mat-fab class="tooltip-btn abajo"
+        (click)="toggleStateSimulation()"
         [matTooltip]="textoAccionPlayPause"
         [color]="'primary'">
             <mat-icon [svgIcon]="'heroicons_solid:play'"></mat-icon>

@@ -65,7 +65,7 @@
 
             <div class="flex flex-col gap-4 content" [class.closed]="!isOpen.iot">
                 <div class="flex flex-col" *ngFor="let variable of variablesIotBroker">
-                    <mat-form-field *ngIf="variable.input && variable.name !== 'maxPriority'"
+                    <mat-form-field *ngIf="variable.input && variable.name !== 'queuesPriority'"
                         class="flex-auto fuse-mat-dense selector">
                         <mat-label class="text-sm text-secondary">{{variable.text}}</mat-label>
                         <input
@@ -73,13 +73,13 @@
                             matInput
                             class="text-secondary text-sm"
                             [name]="variable.name"
-                            [(ngModel)]="variable.value"
-                            (blur)="comprobarValor($event.target.value, variable)"
+                            [ngModel]="variable.value"
+                            (blur)="checkValue($event.target.value, variable)"
                             (keydown.enter)="onEnter($event, variable)"
                             >
                     </mat-form-field>
                     <!-- Colas de prioridad -->
-                    <div class="flex items-center justify-between" *ngIf="variable.name === 'maxPriority'">
+                    <div class="flex items-center justify-between" *ngIf="variable.name === 'queuesPriority'">
                         <span class="text-sm text-secondary">Colas de prioridad</span>
                             <div>
                                 <button mat-icon-button color="primary" type="button" [disabled]="variable.value.length >= 20" matTooltip="Agregar cola" (click)="updateQueueCount(variable.value.length + 1)">
@@ -92,7 +92,7 @@
                             
                     </div>
 
-                    <div class="flex flex-col items-end" *ngIf="variable.name === 'maxPriority'">
+                    <div class="flex flex-col items-end" *ngIf="variable.name === 'queuesPriority'">
                         <mat-form-field *ngFor="let q of variable.value; let i = index"
                             class="fuse-mat-dense mb-1 w-full field-hover">
                             <input
@@ -150,8 +150,8 @@
                             matInput
                             class="text-secondary text-sm"
                             [name]="variable.name"
-                            [(ngModel)]="variable.value"
-                            (blur)="comprobarValor($event.target.value, variable)"
+                            [ngModel]="variable.value"
+                            (blur)="checkValue($event.target.value, variable)"
                             (keydown.enter)="onEnter($event, variable)"
                             >
                     </mat-form-field>
@@ -177,8 +177,8 @@
                             matInput
                             class="text-secondary text-sm"
                             [name]="variable.name"
-                            [(ngModel)]="variable.value"
-                            (blur)="comprobarValor($event.target.value, variable)"
+                            [ngModel]="variable.value"
+                            (blur)="checkValue($event.target.value, variable)"
                             (keydown.enter)="onEnter($event, variable)"
                             >
                     </mat-form-field>
@@ -204,8 +204,8 @@
                             matInput
                             class="text-secondary text-sm"
                             [name]="variable.name"
-                            [(ngModel)]="variable.value"
-                            (blur)="comprobarValor($event.target.value, variable)"
+                            [ngModel]="variable.value"
+                            (blur)="checkValue($event.target.value, variable)"
                             (keydown.enter)="onEnter($event, variable)"
                             >
                     </mat-form-field>
