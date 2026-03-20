@@ -5,6 +5,7 @@ import { Message } from "app/core/types/messages.types";
 import { timestamp } from "rxjs";
 import { FileStorageManager } from "../helpers/FileStorageManager.helper";
 import { iotBrokerFilesName } from "app/core/constants/files.constant"
+import { FileObject } from "app/core/types/variables.types";
 
 /****
  * 
@@ -27,31 +28,24 @@ let categoriserPort: MessagePort; // Conexion con el Categoriser
 //************************************************
 
 const storage = new FileStorageManager();
-const MY_FILES = [iotBrokerFilesName.fileNameSummary, iotBrokerFilesName.fileNamePathRest, iotBrokerFilesName.fileNamePathGenerated, iotBrokerFilesName.fileNameMsgGenerated];
-// Donde guardamos el archivo en el navegador
-let opfsRootDirectory: FileSystemDirectoryHandle;
-
-// Los archivos donde se va a guardar la informacion del IoT Broker
-let summaryFile: FileSystemFileHandle;      // Archivo de remesas
-let pathRestFile: FileSystemFileHandle; // Archivo de lecturas del Categoriser
-let pathGeneratedFile: FileSystemFileHandle;// Archivo de todo lo que se ha generado
-let messagesGeneratedFile: FileSystemFileHandle;     // Archivo de los mensajes individuales generados
-
-// Los encargados de escribir en los archivos del OPFS
-let summaryWriter: FileSystemSyncAccessHandle;
-let pathRestWriter: FileSystemSyncAccessHandle;
-let pathGeneratedWriter: FileSystemSyncAccessHandle;
-let messagesGeneratedWriter: FileSystemSyncAccessHandle;
-
-
-const encoder = new TextEncoder();
-
-// Nombre de los archivos del IoT Broker
-const fileNameSummary = 'iot_broker_generation.csv';         // se almacena información sobre las remesas generadas
-const fileNamePathRest = 'iot_broker_REST.csv';              // se almacena información sobre las peticiones recibidas
-const fileNamePathGenerated = 'iot_broker_generated.csv';    // se almacena todo lo que se ha generado
-const fileNameMsgGenerated = 'iot_broker_msg_generated.csv'  // se almacena todos los mensajes generados
-
+const MY_FILES: FileObject[] = [
+  {
+    name: iotBrokerFilesName.fileNameSummary,
+    header: "Timestamp; Shipment; Messages generated in shipment; Queue Classic lenght; Queue New lenght; Next shipment; Total produced"
+  },
+  {
+    name: iotBrokerFilesName.fileNamePathRest,
+    header: "Timestamp; Read by categoriser; Remaining in queue"
+  },
+  {
+    name: iotBrokerFilesName.fileNamePathGenerated,
+    header: "Timestamp; Read by consumer; Remaining in queue"
+  },
+  {
+    name: iotBrokerFilesName.fileNameMsgGenerated,
+    header: ""
+  }
+]
 
 let msgQueue: Message[] = []; // Cola de mensajes
 let countShipment = 0; // Contador de remesas
@@ -61,42 +55,48 @@ let genMsgTimeout: any;
 
 //! Variables editables de IoT-Broker
 //* Máximo y mínimo de mensajes a generar por remesa
-let maxMsg = 1000;
-let minMsg = 300;
+
 let iniTimestamp = Date.now();
 
-//* Cada X remesas vamos a alternar entre día y noche, de día se generan más mensajes que de noche
-let isDay = true;
-let factorNight = 0.2; // Factor para aumentar los mensajes de día
-let shipmentChange = 500; // Cada X remesas cambiamos de día a noche o viceversa
+let config = {
+  maxMsg: 1000,         // Máximo número de mensajes por remesa
+  minMsg: 300,          // Mínimo número de mensajes por remesa
+  changeDayNight: true, // Define queremos cambiar entre dia y noche
+  factorNight: 0.2,     // Factor para aumentar los mensajes de día
+  shipmentChange: 500,  // Cada X remesas cambiamos de día a noche o viceversa
+  // maxPriority: 1,    // Máxima prioridad //! Creo que no hacen falta estas dos
+  // minPriority: 4,    // Míninma prioridad
+  // Distribucion de prioridades entre los mensajes, esto es el porcentaje de mensajes que tendrán cada prioridad
+  // debe sumar 1.0 y haber tantos como prioridades
+  weights: [0.05, 0.2, 0.30, 0.45],
+  maxQueueMsg: -1,      // Controla el número máximo de mensajes en la cola para depuración, -1 indica sin límite
+  maxTimeToGenerateMsg: 1000,
+  totalMessages: 1000000,
+}
 
-//* Límites de colas 
-const maxPriority = 1; // Máxima prioridad
-let minPriority = 4; // Míninma prioridad
-// Distribucion de prioridades entre los mensajes, esto es el porcentaje de mensajes que tendrán cada prioridad
-// debe sumar 1.0 y haber tantos como prioridades
-let weights = [0.05, 0.15, 0.30, 0.50];
-let maxQueueMsg = -1 // Controla el número máximo de mensajes en la cola para depuración, -1 indica sin límite
-
-// Mensajes totales a producir y contador de cuantos lleva hasta ahora
-let maxTimeToGenerateMsg = 1000; // Tiempo máximo en ms para generar una nueva remesa de mensajes
-let totalMessages = 1000000; // Mensajes totales a producir
 let producedMessages = 0; // Contador de cuantos mensajes lleva hasta ahora
+let isDay = true;        // Define si es de dia
 
 // Función para generar una prioridad aleatoria entre min y max (ambos inclusive)
 const genPriority = () => {
-  const valor = Math.random();
+  const { weights } = config; // [0.05, 0.2, 0.3, 0.45, etc.]
+  const random = Math.random();
+  let cumulativeWeight = 0;
 
+  // Para que las probabilidades sean exactas (5%, 20%, 30%, 45%), debemos de ir sumando los pesos para crear escalones
   for (let i = 0; i < weights.length; i++) {
-    if (valor <= weights[i])
-      return i + 1; // Prioridades van de maxPriority hasta minPriority, 1 a 4
+    cumulativeWeight += weights[i]; // Vamos sumando: 0.05, luego 0.25, luego 0.55, luego 1.0
+
+    if (random <= cumulativeWeight) {
+      return i + 1;
+    }
   }
 
-  return weights.length - 1; // En caso de que no se cumpla ninguna condición, devolvemos la mínima prioridad
+  return weights.length; // Seguridad por si la suma no da exactamente 1.0 por decimales
 }
 
 const writeLog = (fileName: string, message: string, printTimestamp: boolean = true) => {
-  storage.write(fileName, iniTimestamp,  message, printTimestamp);
+  storage.write(fileName, iniTimestamp, message, printTimestamp);
 };
 
 
@@ -104,11 +104,13 @@ const writeLog = (fileName: string, message: string, printTimestamp: boolean = t
 // Los mensajes se encolan al final de la cola
 // Cada mensaje tiene la estructura { remesa: X, id: X-Y, priority: Z }
 const genMsg = () => {
+  const { shipmentChange, totalMessages, maxMsg, minMsg, factorNight, changeDayNight, maxQueueMsg, maxTimeToGenerateMsg } = config;
+
   countShipment++;
 
   console.log('----------- GENERANDO MENSAJES -----------')
   // Si han pasado el número de remesas para hacer el cambio de ciclo
-  if (countShipment % shipmentChange === 0) {
+  if (changeDayNight && countShipment % shipmentChange === 0) {
     isDay = !isDay;
     // console.log(`----------- CHANGE TO ${isDay ? 'DAY' : 'NIGHT'} -----------`)
   }
@@ -120,11 +122,11 @@ const genMsg = () => {
     newGroupMsgs = Math.round((Math.random() * (maxMsg - minMsg))) + minMsg;
 
     // Si es de noche aplicamos la reducción
-    if (!isDay) newGroupMsgs = Math.round(newGroupMsgs * factorNight);
+    if (changeDayNight && !isDay) newGroupMsgs = Math.round(newGroupMsgs * factorNight);
   }
 
   let registerMessages = ``;
-
+  let registerReducedMessage = '';
   for (let i = 0; i < newGroupMsgs; i++) {
     const priority = genPriority(); // Prioridad con la que nace el mensajes
     const timeReg = Date.now() - iniTimestamp; // Hora en la que se regista
@@ -138,22 +140,23 @@ const genMsg = () => {
     });
 
 
-    registerMessages += timeReg + ";" + countShipment + ";" + uidMsg + ";" + priority + '\n';
+    registerReducedMessage += timeReg + ";" + countShipment + ";" + uidMsg + ";" + priority + '\n';
 
 
     // ToDo: Ver que hacer con la generacion de mensajes con TEMPLATE
     //! PROBLEMA: SE HA DESACTIVADO PORQUE NO SE SABE COMO GESTIONAR LOS PROBLEMAS DE MEMORIA QUE GENERA ESTE ARCHIVO.
-    // let msgToRegister = templateMsg.replace(/\*\*TIME\*\*/g, timeReg.toString());
-    // msgToRegister = msgToRegister.replace(/\*\*DEV_EUI\*\*/g, priority.toString());
-    // msgToRegister = msgToRegister.replace(/\*\*UNIQUE_ID\*\*/g, uidMsg);
+    let msgToRegister = templateMsg.replace(/\*\*TIME\*\*/g, timeReg.toString());
+    msgToRegister = msgToRegister.replace(/\*\*DEV_EUI\*\*/g, priority.toString());
+    msgToRegister = msgToRegister.replace(/\*\*UNIQUE_ID\*\*/g, uidMsg);
 
-    // registerMessages += msgToRegister + '\n';
+    registerMessages += msgToRegister + '\n';
   }
 
   // Incrementamos el número de mensajes producidos
   producedMessages += newGroupMsgs;
 
   // Escribimos en messagesGeneratedFile: "Timestamp; Remesa; ID; Priority"
+  writeLog(iotBrokerFilesName.fileNamePathGenerated, registerReducedMessage, false);
   writeLog(iotBrokerFilesName.fileNameMsgGenerated, registerMessages, false);
 
   // Si en la cola hay más mensajes de los permitidos, eliminamos los más antiguos
@@ -178,7 +181,7 @@ const configureCategoriserPort = () => {
     const { type, messageId, payload } = data;
 
     if (!isRuning) return;
-    
+
     if (type === 'GET_MESSAGES') {
       const numMsgsToExtract = payload?.num || 1000;
       // Sacamos los mensajes de la cola interna
@@ -213,76 +216,33 @@ const initializeIotBroker = async () => {
   genMsg();
 }
 
-const createRoutesFiles = async () => {
-  // Configuramos los archivos de escritura
-  opfsRootDirectory = await navigator.storage.getDirectory();
-
-  // Creamos los archivos con sus nombres definidos
-  summaryFile = await opfsRootDirectory.getFileHandle(fileNameSummary, { create: true });
-  pathRestFile = await opfsRootDirectory.getFileHandle(fileNamePathRest, { create: true });
-  pathGeneratedFile = await opfsRootDirectory.getFileHandle(fileNamePathGenerated, { create: true });
-  messagesGeneratedFile = await opfsRootDirectory.getFileHandle(fileNameMsgGenerated, { create: true });
-
-  
-  initializeWriters(true);
-}
-
-const initializeWriters = async (resetFiles: boolean) => {
-  // Conectamos la escritura
-  summaryWriter = await summaryFile.createSyncAccessHandle();
-  pathRestWriter = await pathRestFile.createSyncAccessHandle();
-  pathGeneratedWriter = await pathGeneratedFile.createSyncAccessHandle();
-  messagesGeneratedWriter = await messagesGeneratedFile.createSyncAccessHandle();
-
-  // Reiniciamos los archivos
-  if(resetFiles){
-    summaryWriter.truncate(0);
-    pathRestWriter.truncate(0);
-    pathGeneratedWriter.truncate(0);
-    messagesGeneratedWriter.truncate(0);
-  }
-
-  summaryWriter.flush();
-  pathRestWriter.flush();
-  pathGeneratedWriter.flush();
-  messagesGeneratedWriter.flush();
-}
-
-const closeWriters = () => {
-  summaryWriter.flush();
-  summaryWriter.close();
-  
-  pathRestWriter.flush();
-  pathRestWriter.close();
-  
-  pathGeneratedWriter.flush();
-  pathGeneratedWriter.close();
-
-  messagesGeneratedWriter.flush();
-  messagesGeneratedWriter.close();
-}
-
 const downloadCSV = async (name: string) => {
   const fileHandle = await storage.prepareForDownload(name);
   postMessage({
     type: 'DOWNLOAD_FINISHED',
-    payload: fileHandle, 
+    payload: fileHandle,
     filename: name
   });
 }
 
 const togglePlayPause = async (simulationIsRuning: boolean) => {
   isRuning = simulationIsRuning; // El estado se gestiona desde el servicio de simulacion
-  if(!isRuning){
+  if (!isRuning) {
     // closeWriters();
     if (genMsgTimeout) clearTimeout(genMsgTimeout);
   }
   else {
     // await initializeWriters(false);
     genMsg();
-    
+
   }
   console.log(`Broker Worker: Sistema ${isRuning ? 'REANUDADO' : 'PAUSADO'}`);
+}
+
+const updateConfig = (newConfig: any) => {
+  config = { ...config, ...newConfig };
+
+  console.log('Nuevo objeto config:', config);
 }
 // Controlador de eventos. Escuchamos desde simulation.service
 addEventListener('message', (event) => {
@@ -305,17 +265,16 @@ addEventListener('message', (event) => {
     case 'STOP':
       isRuning = false;
       if (genMsgTimeout) clearTimeout(genMsgTimeout);
-      closeWriters();
       console.log('Broker Worker: Sistema DETENIDO');
       break;
 
     case 'PLAY_PAUSE':
-      
+
       togglePlayPause(payload);
       break;
 
     case 'CONFIGURE':
-      console.log('Broker Worker: Sistema CONFIGURADO');
+      updateConfig(payload)
 
       break;
 

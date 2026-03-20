@@ -6,7 +6,10 @@ export const iotBrokerFilesName = {
 }
 
 export const categoriserFilesNames = {
-
+    fileNameClassified: 'categoriser.csv',
+    fileNameREST: 'categoriser_REST.csv',
+    fileNameStatus: 'categoriser_STATUS.csv',
+    fileNameExpirations: 'categoriserExpirations.csv'
 }
 
 export const dispatcherFilesNames = {

@@ -3,7 +3,6 @@ import { MatIcon } from "@angular/material/icon";
 import { MatButtonModule } from '@angular/material/button';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { NgForOf } from "../../../../node_modules/@angular/common/index";
-import { FileItem } from 'app/core/types/variables.types';
 import { SimulationService } from 'app/core/simulation/simulation.service';
 import { Subscription } from 'rxjs';
 

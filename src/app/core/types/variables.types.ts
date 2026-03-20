@@ -1,18 +1,14 @@
-export interface PriorityQueue {
-    weight: number;
-};
 
 export interface Variables { // If minimum and maximum are -1, they are ignored
     name: string;
-    value: number | PriorityQueue[];
+    value: number | number[];
     text: string;
     minimum: number;
     maximum: number;
     input: boolean
 };
 
-export interface FileItem {
-    id: string | number;
+export interface FileObject {
     name: string;
-    url: string;
+    header: string;
 }

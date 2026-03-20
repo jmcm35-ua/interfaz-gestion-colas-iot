@@ -9,7 +9,7 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { FormsModule, UntypedFormGroup } from '@angular/forms';
 import { FuseConfirmationService } from '@fuse/services/confirmation/confirmation.service';
 import { SimulationService } from 'app/core/simulation/simulation.service';
-import { PriorityQueue, Variables } from 'app/core/types/variables.types';
+import { Variables } from 'app/core/types/variables.types';
 
 @Component({
   selector: 'app-configuration',
@@ -36,16 +36,16 @@ export class ConfigurationComponent {
   variablesIotBroker: Variables[] = [
     { name: 'maxMsg', value: 1000, text: 'Máximo de mensajes por remesa', minimum: 1, maximum: 10000, input: true },
     { name: 'minMsg', value: 100, text: 'Mínimo de mensajes por remesa', minimum: 1, maximum: 10000, input: true },
-    { name: 'isDay', value: 1, text: 'Ciclos de día y noche', minimum: -1, maximum: -1, input: false },
+    { name: 'changeDayNight', value: 1, text: 'Ciclos de día y noche', minimum: -1, maximum: -1, input: false },
     { name: 'factorNight', value: 0.2, text: 'Factor noche', minimum: 0, maximum: 1, input: true },
     { name: 'maxTimeToGenerateMsg', value: 1000, text: 'Tiempo máximo para generar una remesa (ms)', minimum: 100, maximum: 10000000, input: true },
     { name: 'maxQueueMsg', value: -1, text: 'Mensajes en la cola para depuración', minimum: -1, maximum: 1000000, input: true },
     {
-      name: 'queuesPriority', value: [
-        { weight: 0.05 },
-        { weight: 0.20 },
-        { weight: 0.30 },
-        { weight: 0.45 },
+      name: 'weights', value: [
+        0.05,
+        0.20,
+        0.30,
+        0.45,
       ], text: 'Prioridad máxima de los mensajes', minimum: 1, maximum: 100, input: true
     },
     { name: 'totalMessages', value: 1000000, text: 'Total de mensajes a generar', minimum: 1000, maximum: 100000000, input: true }
@@ -94,6 +94,12 @@ export class ConfigurationComponent {
   totalWeight = 1;
 
   ngOnInit() {
+    this.lastConfiguration = {
+      iotBroker: this.extractValues(this.variablesIotBroker),
+      categoriser: this.extractValues(this.variablesCategoriser),
+      dispatcher: this.extractValues(this.variablesDispatcher),
+      consumer: this.extractValues(this.variablesConsumer)
+    };
     this.updateTotal(false);
     this.applyConfiguration();
   }
@@ -105,15 +111,15 @@ export class ConfigurationComponent {
     count = Number(count);
     if (count < 1) count = 1;
 
-    const maxPriorityVar = this.variablesIotBroker.find(v => v.name === 'queuesPriority');
+    const maxPriorityVar = this.variablesIotBroker.find(v => v.name === 'weights');
     if (!maxPriorityVar || !Array.isArray(maxPriorityVar.value)) {
-      console.warn('queuesPriority no definido o no es un array');
+      console.warn('weights no definido o no es un array');
       return;
     }
-    const queues = maxPriorityVar.value as PriorityQueue[];
+    const queues = maxPriorityVar.value;
 
     while (queues.length < count) {
-      queues.push({ weight: 0.01 });
+      queues.push(0.01);
     }
 
     while (queues.length > count) {
@@ -124,31 +130,32 @@ export class ConfigurationComponent {
   }
 
   updateTotal(configureSimulation: boolean = true) {
-    const maxPriorityVar = this.variablesIotBroker.find(v => v.name === 'queuesPriority');
+    const maxPriorityVar = this.variablesIotBroker.find(v => v.name === 'weights');
     if (!maxPriorityVar || !Array.isArray(maxPriorityVar.value)) {
-      console.warn('queuesPriority no definido o no es un array');
+      console.warn('weights no definido o no es un array');
       return;
     }
-    const queues = maxPriorityVar.value as PriorityQueue[];
+    const queues = maxPriorityVar.value;
     console.trace('Rastreando llamada a updateTotal. configureSimulation:', configureSimulation);
     this.totalWeight = queues
-      .map(q => Number(this.onWeightValue(q.weight)))
+      .map(q => Number(this.onWeightValue(q)))
       .reduce((a, b) => a + b, 0);
     console.log('Cuatntas veces paso por aqui?')
     if (this.totalWeight === 100 && configureSimulation) this.applyConfiguration();
   }
 
   weightPercent(i: number) {
-    const maxPriorityVar = this.variablesIotBroker.find(v => v.name === 'queuesPriority');
-    const queues = maxPriorityVar?.value as PriorityQueue[];
+    const maxPriorityVar = this.variablesIotBroker.find(v => v.name === 'weights');
+    const queues = maxPriorityVar?.value as number[];
 
-    return queues[i].weight * 100;
+    return queues[i] * 100;
   }
 
   setWeightPercent(i: number, value: number) {
-    const maxPriorityVar = this.variablesIotBroker.find(v => v.name === 'queuesPriority');
-    const queues = maxPriorityVar?.value as PriorityQueue[];
-    queues[i].weight = value / 100;
+    const maxPriorityVar = this.variablesIotBroker.find(v => v.name === 'weights');
+    const queues = maxPriorityVar?.value as number[];
+
+    queues[i] = value / 100;
   }
 
   onEnterWeight(event: any, index: number) {
@@ -157,20 +164,20 @@ export class ConfigurationComponent {
 
   onWeightInput(event: any, index: number) {
     const value = parseFloat(event.target.value);
-    const maxPriorityVar = this.variablesIotBroker.find(v => v.name === 'queuesPriority');
+    const maxPriorityVar = this.variablesIotBroker.find(v => v.name === 'weights');
     if (!maxPriorityVar || !Array.isArray(maxPriorityVar.value)) {
-      console.warn('queuesPriority no definido o no es un array');
+      console.warn('weights no definido o no es un array');
       return;
     }
 
-    const queues = maxPriorityVar.value as PriorityQueue[];
+    const queues = maxPriorityVar.value;
 
     if (isNaN(value) || value < 1) {
-      queues[index].weight = 0.01;
+      queues[index] = 0.01;
     } else if (value > 100) {
-      queues[index].weight = 1;
+      queues[index] = 1;
     } else {
-      queues[index].weight = Math.round((value / 100) * 10000) / 10000;
+      queues[index] = Math.round((value / 100) * 10000) / 10000;
     }
 
     this.updateTotal();
@@ -185,7 +192,7 @@ export class ConfigurationComponent {
       return;
     }
 
-    q.weight = Number(value) / 100;
+    q = Number(value) / 100;
   }
 
   onEnter(event: any, variable: Variables) {
@@ -223,9 +230,8 @@ export class ConfigurationComponent {
   }
 
   applyConfiguration() {
-    console.log("Calculando cambios en la configuración...");
+    console.log("Calculando cambios...");
 
-    // Configuracion que queremos mandar al servicio
     const newConfigSimulation: any = {
       iotBroker: this.extractValues(this.variablesIotBroker),
       categoriser: this.extractValues(this.variablesCategoriser),
@@ -233,33 +239,35 @@ export class ConfigurationComponent {
       consumer: this.extractValues(this.variablesConsumer)
     };
 
-    // Objeto que se mandara a los workers
+    console.log({ newConfigSimulation })
+
     const configToSend: any = {};
+    let hasChanges = false;
 
-    // Miramos seccion por seccion si han habido cambios
     Object.keys(newConfigSimulation).forEach((key) => {
-
-      // Convertimos a string para comparar el CONTENIDO real, no la memoria
       const oldConfString = JSON.stringify(this.lastConfiguration[key]);
       const newConfString = JSON.stringify(newConfigSimulation[key]);
 
       if (oldConfString !== newConfString) {
-        // SI HAY CAMBIOS:
-        configToSend[key] = newConfigSimulation[key]; // Lo metemos en el paquete a enviar
-
-        // Actualizamos el historial (haciendo una copia profunda para evitar cruce de memorias)
-        this.lastConfiguration[key] = structuredClone(JSON.parse(newConfString));
-      } else {
-        // SI NO HAY CAMBIOS:
-        configToSend[key] = null;
+        // SOLO metemos en el paquete lo que ha cambiado
+        configToSend[key] = newConfigSimulation[key];
+        console.log(configToSend[key], key);
+        // Actualizamos el historial
+        this.lastConfiguration[key] = JSON.parse(newConfString);
+        hasChanges = true;
       }
     });
 
-    console.log("Configuración original generada:", newConfigSimulation);
-    console.log("Delta (Solo lo que ha cambiado):", configToSend);
+    console.log({ newConfigSimulation, configToSend })
+    console.log("Config real en este instante:", JSON.parse(JSON.stringify(configToSend)));
+    if (hasChanges) {
+      const cleanDelta = JSON.parse(JSON.stringify(configToSend));
 
-    if (Object.values(configToSend).some((conf: any) => conf))
-      this.simulationService.configureSimulation(configToSend);
+      console.log("Enviando Delta Limpio:", cleanDelta);
+      this.simulationService.configureSimulation(cleanDelta);
+    } else {
+      console.log("No hay cambios detectados, no se envía nada.");
+    }
   }
 
   //************************************************************
@@ -398,7 +406,7 @@ export class ConfigurationComponent {
             const variable = sectionVariables.find(v => v.name === varFromFile.name);
             if (!variable) return;
 
-            if (variable.name === 'queuesPriority') {
+            if (variable.name === 'weights') {
               // Esta logica hay que moverla a una función aparte porque se repite y realizar una comprobacion de que todos los valores sumen 1
               variable.value = varFromFile.value;
               this.updateTotal(false);

@@ -65,7 +65,7 @@
 
             <div class="flex flex-col gap-4 content" [class.closed]="!isOpen.iot">
                 <div class="flex flex-col" *ngFor="let variable of variablesIotBroker">
-                    <mat-form-field *ngIf="variable.input && variable.name !== 'queuesPriority'"
+                    <mat-form-field *ngIf="variable.input && variable.name !== 'weights'"
                         class="flex-auto fuse-mat-dense selector">
                         <mat-label class="text-sm text-secondary">{{variable.text}}</mat-label>
                         <input
@@ -79,7 +79,7 @@
                             >
                     </mat-form-field>
                     <!-- Colas de prioridad -->
-                    <div class="flex items-center justify-between" *ngIf="variable.name === 'queuesPriority'">
+                    <div class="flex items-center justify-between" *ngIf="variable.name === 'weights'">
                         <span class="text-sm text-secondary">Colas de prioridad</span>
                             <div>
                                 <button mat-icon-button color="primary" type="button" [disabled]="variable.value.length >= 20" matTooltip="Agregar cola" (click)="updateQueueCount(variable.value.length + 1)">
@@ -92,7 +92,7 @@
                             
                     </div>
 
-                    <div class="flex flex-col items-end" *ngIf="variable.name === 'queuesPriority'">
+                    <div class="flex flex-col items-end" *ngIf="variable.name === 'weights'">
                         <mat-form-field *ngFor="let q of variable.value; let i = index"
                             class="fuse-mat-dense mb-1 w-full field-hover">
                             <input
@@ -102,7 +102,7 @@
                                 class="text-right pr-1 text-secondary"
                                 type="number"
                                 name="weight-{{i}}"
-                                [ngModel]="onWeightValue(q.weight)"
+                                [ngModel]="onWeightValue(q)"
                                 (ngModelChange)="onChangePercent($event, q)"
                                 (blur)="onWeightInput($event, i)"
                                 (keydown.enter)="onEnterWeight($event, i)"

@@ -50,11 +50,31 @@ export class SimulationService {
     console.log('CREAMOS LOS ARCHIVOS DE LOS WORKERS')
   }
 
+  // Pasamos del formato recibido {name: 'changeDayNight', value: 1} al siguiente {changeDayNight: true}
+  prepareObjectConfig = (newConfig: any[]) => {
+    return newConfig.reduce((acc: any, curr: any) => {
+      acc[curr.name] = curr.value;
+      return acc;
+    }, {} as any);
+  }
 
   configureSimulation = (newConfig: any) => {
-    //ToDo: Deberiamos gestionar si han habido cambios
     try {
-      // this.iotBrokerWorker.postMessage({ type: 'START' });
+
+      if (newConfig?.iotBroker !== null) {
+        //Damos formato a los  objetos config
+        const configToSendIotBroker = this.prepareObjectConfig(newConfig.iotBroker);
+        console.log({ configToSendIotBroker })
+        this.iotBrokerWorker.postMessage({ type: 'CONFIGURE', payload: configToSendIotBroker });
+      }
+
+      if (newConfig?.consumer !== null) {
+        //Damos formato a los  objetos config
+        const configToSendConsumer = this.prepareObjectConfig(newConfig.consumer);
+        console.log({ configToSendConsumer })
+        // this.iotBrokerWorker.postMessage({ type: 'CONFIGURE', payload: configToSendIotBroker });
+      }
+
 
     } catch (error) {
       console.error('Se ha producido un error al configurar los workers: ' + error);
@@ -66,25 +86,21 @@ export class SimulationService {
     const suggestedName = isZipMode ? 'simulation_logs.zip' : singleFileName;
 
     try {
-      // 1. Abrimos el selector de archivos del sistema operativo
       const fileHandle = await (window as any).showSaveFilePicker({
         suggestedName: suggestedName,
       });
 
-      // 2. Creamos el flujo de escritura hacia el archivo local del usuario
       const writable = await fileHandle.createWritable();
 
       if (!isZipMode && singleFileName) {
-        // MODO SINGLE: Obtenemos el worker y pedimos el archivo
         const worker = this.fileWorkerMap.get(singleFileName);
         if (!worker) throw new Error(`No worker found for ${singleFileName}`);
 
         // processWorkerFileResponse ya te devuelve el File (que es un Blob)
         const result = await this.processWorkerFileResponse(worker, singleFileName);
-        
-        // 3. Escribimos el contenido directamente en el archivo del usuario
+
         await writable.write(result.content);
-        
+
       } else {
         // MODO ALL (ZIP)
         const promises: Promise<{ filename: string, content: Blob }>[] = [];
@@ -94,18 +110,17 @@ export class SimulationService {
 
         const allFiles = await Promise.all(promises);
         const zip = new JSZip();
-        
+
         allFiles.forEach(file => {
           zip.file(file.filename, file.content);
         });
 
         const zipBlob = await zip.generateAsync({ type: 'blob' });
-        
+
         // 3. Escribimos el ZIP generado en el archivo del usuario
         await writable.write(zipBlob);
       }
 
-      // 4. IMPORTANTE: Cerramos el stream para que los cambios se guarden en el disco
       await writable.close();
       console.log('Archivo movido con éxito al disco local');
 
@@ -131,11 +146,11 @@ export class SimulationService {
 
           // PAYLOAD ahora es un FileSystemFileHandle
           const fileHandle = payload as FileSystemFileHandle;
-          console.log({fileHandle})
+          console.log({ fileHandle })
           // Extraemos el archivo (esto es un Blob que apunta al disco OPFS)
           // Es muy eficiente y no carga los 2GB en RAM de golpe
           const file = await fileHandle.getFile();
-          console.log('ESTAmos descargando', {file})
+          console.log('ESTAmos descargando', { file })
           resolve({ filename, content: file });
         }
       };
@@ -150,17 +165,18 @@ export class SimulationService {
   }
 
   handleStateSimulation = () => {
-    if(!this.initializedSubject.value) this.startSimulation();
+    if (!this.initializedSubject.value) this.startSimulation();
     else this.togglePlayPause();
   }
 
   togglePlayPause = () => {
     try {
       this.runingSubject.next(!this.runingSubject.value);
-      console.log('LA SIMULACION SE HA DETENIDO? ', this.runingSubject.value)
-      this.iotBrokerWorker.postMessage({ type: 'PLAY_PAUSE', payload: this.runingSubject.value});
+      const isPlaying = this.runingSubject.value;
 
-      // this.categoriserWorker.postMessage({ type: 'PLAY-PAUSE' });
+      this.iotBrokerWorker.postMessage({ type: 'PLAY_PAUSE', payload: isPlaying });
+
+      this.categoriserWorker.postMessage({ type: 'PLAY-PAUSE', payload: isPlaying });
     } catch (error) {
       this.toggleInitializedSimulation(false);
       console.error(`Se ha producido un error al poner en ${this.isRuning$ ? 'PLAY' : 'PAUSE'} la simulacion: ` + error);
@@ -172,7 +188,8 @@ export class SimulationService {
     try {
       this.toggleInitializedSimulation(true);
       this.iotBrokerWorker.postMessage({ type: 'START' });
-      // this.categoriserWorker.postMessage({ type: 'START' });
+      this.categoriserWorker.postMessage({ type: 'START' });
+
     } catch (error) {
       this.toggleInitializedSimulation(false);
       console.error('Se ha producido un error al incializar los workers: ' + error);

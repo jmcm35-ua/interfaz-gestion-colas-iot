@@ -1,32 +1,35 @@
+import { FileObject } from "app/core/types/variables.types";
+
 export class FileStorageManager {
   private root!: FileSystemDirectoryHandle;
   private files: Map<string, FileSystemFileHandle> = new Map();
   private writers: Map<string, FileSystemSyncAccessHandle> = new Map();
 
-  async init(fileNames: string[]) {
+  async init(files: FileObject[]) {
     this.root = await navigator.storage.getDirectory();
-    for (const name of fileNames) {
-      const handle = await this.root.getFileHandle(name, { create: true });
-      this.files.set(name, handle);
-      this.writers.set(name, await handle.createSyncAccessHandle());
+    for (const file of files) {
+      const handle = await this.root.getFileHandle(file.name, { create: true });
+      this.files.set(file.name, handle);
+      this.writers.set(file.name, await handle.createSyncAccessHandle());
+      this.truncateFile(this.writers.get(file.name)!);
+
+      this.write(file.name, null, file.header, false);
     }
   }
 
   write(fileName: string, iniTimestamp: any, message: string, printTimestamp: boolean) {
     const writer = this.writers.get(fileName);
     if (!writer) return;
-    console.log('----------- ESCRIBIENDO MENSAJES -----------')
 
     const timestamp = Date.now() - iniTimestamp;
-
-    // Si printTimestamp es true, imprimimos el tiempo.
-    const finalMessage = printTimestamp
-        ? `${timestamp};${message}\n`
-        : `${message}\n`;
-
-        
+    const finalMessage = printTimestamp ? `${timestamp};${message}\n` : `${message}\n`;
     const encoder = new TextEncoder();
-    writer.write(encoder.encode(finalMessage));
+    const buffer = encoder.encode(finalMessage);
+
+    // IMPORTANTE: Obtenemos el tamaño actual y escribimos justo ahí (al final)
+    const currentSize = writer.getSize();
+    writer.write(buffer, { at: currentSize });
+
     writer.flush();
   }
 
@@ -36,17 +39,23 @@ export class FileStorageManager {
 
     if (writer && fileHandle) {
       writer.flush();
-      writer.close(); // Liberamos el bloqueo
+      writer.close(); // Liberamos para que el servicio pueda leer
 
-      // Reabrimos inmediatamente para no perder datos de la simulación
-      this.writers.set(fileName, await fileHandle.createSyncAccessHandle());
+      // Reabrimos el handle. El próximo write() usará getSize() y escribirá al final.
+      const newWriter = await fileHandle.createSyncAccessHandle();
+      this.writers.set(fileName, newWriter);
+
       return fileHandle;
     }
     throw new Error(`File ${fileName} not found`);
   }
 
+  truncateFile(writer: FileSystemSyncAccessHandle) {
+    writer.truncate(0)
+  }
+
   truncateAll() {
-    this.writers.forEach(w => w.truncate(0));
+    this.writers.forEach(w => this.truncateFile(w));
   }
 
   closeAll() {
