@@ -87,7 +87,6 @@ export class ConfigurationComponent {
   }
 
   isNumber(value: any): boolean {
-    console.log(value, typeof value);
     return typeof value === 'number';
   }
 
@@ -136,11 +135,10 @@ export class ConfigurationComponent {
       return;
     }
     const queues = maxPriorityVar.value;
-    console.trace('Rastreando llamada a updateTotal. configureSimulation:', configureSimulation);
     this.totalWeight = queues
       .map(q => Number(this.onWeightValue(q)))
       .reduce((a, b) => a + b, 0);
-    console.log('Cuatntas veces paso por aqui?')
+
     if (this.totalWeight === 100 && configureSimulation) this.applyConfiguration();
   }
 
@@ -213,7 +211,6 @@ export class ConfigurationComponent {
       newValue = value;
     }
 
-    console.log(variable.value, newValue)
     if (variable.value === newValue) return; // Si no ha habido un cambio en el valor nos salimos de la funcion y no lanzamos nada
 
     variable.value = newValue;
@@ -224,49 +221,51 @@ export class ConfigurationComponent {
   extractValues(variables: Variables[]): any {
     const result: { name: string, value: any }[] = [];
     variables.forEach(variable => {
-      result.push({ name: variable.name, value: variable.value });
+      result.push({ name: variable.name, value: structuredClone(variable.value) });
     });
     return result;
   }
 
   applyConfiguration() {
-    console.log("Calculando cambios...");
 
-    const newConfigSimulation: any = {
+    // Extraemos el estado actual de la configuracion
+    const currentConfig: any = {
       iotBroker: this.extractValues(this.variablesIotBroker),
       categoriser: this.extractValues(this.variablesCategoriser),
       dispatcher: this.extractValues(this.variablesDispatcher),
       consumer: this.extractValues(this.variablesConsumer)
     };
 
-    console.log({ newConfigSimulation })
-
     const configToSend: any = {};
     let hasChanges = false;
 
-    Object.keys(newConfigSimulation).forEach((key) => {
-      const oldConfString = JSON.stringify(this.lastConfiguration[key]);
-      const newConfString = JSON.stringify(newConfigSimulation[key]);
+    // Iteramos en cada seccion para registrar los cambios
+    Object.keys(currentConfig).forEach((sectionKey) => {
+      const currentVariables = currentConfig[sectionKey] as any[];
+      const lastVariables = this.lastConfiguration[sectionKey] as any[];
 
-      if (oldConfString !== newConfString) {
-        // SOLO metemos en el paquete lo que ha cambiado
-        configToSend[key] = newConfigSimulation[key];
-        console.log(configToSend[key], key);
-        // Actualizamos el historial
-        this.lastConfiguration[key] = JSON.parse(newConfString);
+      // Buscamos solo las variables que han cambiado dentro de esta sección
+      const deltaVariables = currentVariables.filter(currentVar => {
+        const lastVar = lastVariables.find(v => v.name === currentVar.name);
+
+        // Comparamos el valor actual con el anterior
+        return JSON.stringify(currentVar.value) !== JSON.stringify(lastVar?.value);
+      });
+
+      if (deltaVariables.length > 0) {
+        // SI HAY CAMBIOS: Enviamos solo las variables modificadas de esta sección
+        configToSend[sectionKey] = deltaVariables;
+
+        // Actualizamos el historial de ESTA sección con los nuevos valores
+        this.lastConfiguration[sectionKey] = JSON.parse(JSON.stringify(currentVariables));
         hasChanges = true;
       }
     });
 
-    console.log({ newConfigSimulation, configToSend })
-    console.log("Config real en este instante:", JSON.parse(JSON.stringify(configToSend)));
     if (hasChanges) {
+      // Hacemos una copia limpia para evitar problemas de referencias
       const cleanDelta = JSON.parse(JSON.stringify(configToSend));
-
-      console.log("Enviando Delta Limpio:", cleanDelta);
       this.simulationService.configureSimulation(cleanDelta);
-    } else {
-      console.log("No hay cambios detectados, no se envía nada.");
     }
   }
 

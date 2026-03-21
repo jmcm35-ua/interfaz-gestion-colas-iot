@@ -14,6 +14,7 @@ export class SimulationService {
   public isInitialized$ = this.initializedSubject.asObservable();
   public isRuning$ = this.runingSubject.asObservable();
 
+  private lastPriorityLength = 4;
 
   // Declaración de los Workers
   private iotBrokerWorker!: Worker;
@@ -22,10 +23,6 @@ export class SimulationService {
   private consumerWorker!: Worker;
 
   fileWorkerMap = new Map<string, Worker>(); // Mapeo de los nombres de los archivos que tendra cada worker
-
-  //ToDo: Las colas de prioridad deben de ir sincronizadas aquí
-  //* y de aquí se las mandamos a los workers.(Es decir, l a cantidad)
-
 
   constructor() {
     this.initWorkers();
@@ -60,19 +57,33 @@ export class SimulationService {
 
   configureSimulation = (newConfig: any) => {
     try {
+      let changePriorityQueues = false;
 
-      if (newConfig?.iotBroker !== null) {
-        //Damos formato a los  objetos config
+      console.log({ newConfig })
+      if (newConfig?.iotBroker) {
+        //Damos formato al objeto config de IoT-Broker
         const configToSendIotBroker = this.prepareObjectConfig(newConfig.iotBroker);
+
+        if (configToSendIotBroker?.weights && configToSendIotBroker?.weights.length !== this.lastPriorityLength) {
+          changePriorityQueues = true;
+          this.lastPriorityLength = configToSendIotBroker.weights.length;
+        }
+
         console.log({ configToSendIotBroker })
         this.iotBrokerWorker.postMessage({ type: 'CONFIGURE', payload: configToSendIotBroker });
       }
 
-      if (newConfig?.consumer !== null) {
-        //Damos formato a los  objetos config
-        const configToSendConsumer = this.prepareObjectConfig(newConfig.consumer);
-        console.log({ configToSendConsumer })
-        // this.iotBrokerWorker.postMessage({ type: 'CONFIGURE', payload: configToSendIotBroker });
+      if (newConfig?.categoriser || changePriorityQueues) {
+        console.log('ENTRO AQUI')
+        //Damos formato al objeto config del Categoriser
+        console.log(newConfig)
+        const configToSendCategoriser = newConfig?.categoriser ? this.prepareObjectConfig(newConfig.categoriser) : {};
+
+        if (changePriorityQueues) {
+          configToSendCategoriser['minPriority'] = this.lastPriorityLength
+        }
+        console.log({ configToSendCategoriser })
+        this.categoriserWorker.postMessage({ type: 'CONFIGURE', payload: configToSendCategoriser });
       }
 
 
@@ -117,7 +128,7 @@ export class SimulationService {
 
         const zipBlob = await zip.generateAsync({ type: 'blob' });
 
-        // 3. Escribimos el ZIP generado en el archivo del usuario
+        // Escribimos el ZIP generado en el archivo del usuario
         await writable.write(zipBlob);
       }
 
@@ -131,10 +142,10 @@ export class SimulationService {
   }
 
   /**
-   * Nueva función unificada que:
-   * 1. Pide el archivo al worker.
-   * 2. Recibe el FileHandle.
-   * 3. Extrae el File (Blob) de forma que no bloquee la RAM.
+   * Esta funcion:
+   * - Pide el archivo al worker.
+   * - Recibe el FileHandle.
+   * - Extrae el File evitando bloquear la RAM.
    */
   private processWorkerFileResponse(worker: Worker, name: string): Promise<{ filename: string, content: Blob }> {
     return new Promise((resolve) => {
@@ -176,7 +187,7 @@ export class SimulationService {
 
       this.iotBrokerWorker.postMessage({ type: 'PLAY_PAUSE', payload: isPlaying });
 
-      this.categoriserWorker.postMessage({ type: 'PLAY-PAUSE', payload: isPlaying });
+      this.categoriserWorker.postMessage({ type: 'PLAY_PAUSE', payload: isPlaying });
     } catch (error) {
       this.toggleInitializedSimulation(false);
       console.error(`Se ha producido un error al poner en ${this.isRuning$ ? 'PLAY' : 'PAUSE'} la simulacion: ` + error);
@@ -187,6 +198,8 @@ export class SimulationService {
     // Iniciamos el worker
     try {
       this.toggleInitializedSimulation(true);
+      this.runingSubject.next(true);
+
       this.iotBrokerWorker.postMessage({ type: 'START' });
       this.categoriserWorker.postMessage({ type: 'START' });
 

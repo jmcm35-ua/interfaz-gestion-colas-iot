@@ -45,23 +45,26 @@ let config: CategoriserConfig = {
 }
 
 let initialTimestamp = Date.now(); // Cuando se inicia el sistema
+let isRuning = false;
+let classifyTimeout: any;
+let expirationTimeout: any;
 
 const writeLog = (fileName: string, message: string, printTimestamp: boolean = true) => {
   storage.write(fileName, initialTimestamp, message, printTimestamp);
 };
 
 const initiliazeCategoriser = async () => {
+  isRuning = true;
   initialTimestamp = Date.now(); // Cuando se inicia el sistema
-  let { minPriority } = config;
   // ToDo: hay que inicializar baseExpirationTime dependiendo del número de colas
   // Incializamos cada cola a una lista vacía y los expiration time
-  updateCategoriserStructure(minPriority);
-  preprareHeaders(minPriority);
   await storage.init(MY_FILES);
+  updateCategoriserStructure();
   launch(); // Comienza el ciclo de lectura y categorizacion
 }
 
-const preprareHeaders = (minPriority: number) => {
+const preprareHeaders = () => {
+  const { minPriority } = config;
   let txt1 = "";
   let txt2 = "";
   let txt3 = "";
@@ -71,19 +74,22 @@ const preprareHeaders = (minPriority: number) => {
     txt2 += " Q" + (i + 1) + ";";
     txt3 += " Q" + (i + 1) + " expired; Q" + (i + 1) + " remaining;";
   }
-  MY_FILES[0].header = "Timestamp; Request; Recovered; " + txt2; // Classified
-  MY_FILES[1].header = "Timestamp; Requests by Dispatcher; Read by Dispatcher; Read Queue; " + txt1 + " Remaining queue expired"; // REST
-  MY_FILES[2].header = "Timestamp; " + txt2 + " Q Expirados"; // Status
-  MY_FILES[3].header = "Timestamp; " + txt3 + " Total expired ; Expired queue" + txt2; // Expiration
+  writeLog(categoriserFilesNames.fileNameClassified, "Timestamp; Request; Recovered; " + txt2, false);
+  writeLog(categoriserFilesNames.fileNameREST, "Timestamp; Requests by Dispatcher; Read by Dispatcher; Read Queue; " + txt1 + " Remaining queue expired", false)
+  writeLog(categoriserFilesNames.fileNameStatus, "Timestamp; " + txt2 + " Q Expirados", false);
+  writeLog(categoriserFilesNames.fileNameExpirations, "Timestamp; " + txt3 + " Total expired ; Expired queue", false);
 }
 
-const updateCategoriserStructure = (newMinPriority: number): void => {
-  config.minPriority = newMinPriority;
+const updateCategoriserStructure = (): void => {
+  const { minPriority } = config;
 
-  syncMessageQueues(newMinPriority);
-  syncExpirationTimes(newMinPriority);
+  syncMessageQueues(minPriority);
+  syncExpirationTimes(minPriority);
 
-  console.log(`Estructura actualizada: ${newMinPriority} colas operativas.`);
+
+  preprareHeaders();
+
+  console.log(`Estructura actualizada: ${minPriority} colas operativas.`);
 };
 
 /**
@@ -192,13 +198,13 @@ const readFromIotBrokerAndClassify = async () => {
 
 const showQueuesStatus = () => {
   const { priorityMsgQueues, priorityExpirationTimeQueue, expirationMsgQueue } = config;
-  console.log("-----------------------------------------------------");
-  console.log("Status of priority queues after reading from the IoT broker:");
+  // console.log("-----------------------------------------------------");
+  // console.log("Status of priority queues after reading from the IoT broker:");
   let msg = "Expiration: "
   for (let i = 0; i < priorityMsgQueues.length; i++) {
     msg += "P" + (i + 1) + ":" + priorityExpirationTimeQueue[i] + "ms ";
   }
-  console.log(msg, priorityExpirationTimeQueue);
+  // console.log(msg, priorityExpirationTimeQueue);
 
   msg = "Size: ";
   let txt = "";
@@ -206,9 +212,9 @@ const showQueuesStatus = () => {
     msg += "Queue: " + (i + 1) + " : " + priorityMsgQueues[i].length + " ";
     txt += priorityMsgQueues[i].length + ";";
   }
-  console.log(msg);
-  console.log("expiredQueue ", expirationMsgQueue.length, " msg.");
-  console.log("-----------------------------------------------------");
+  // console.log(msg);
+  // console.log("expiredQueue ", expirationMsgQueue.length, " msg.");
+  // console.log("-----------------------------------------------------");
   // "Timestamp; Q1; Q2; Q3; Q4; Expirados"
   writeLog(categoriserFilesNames.fileNameStatus, txt + expirationMsgQueue.length, true)
 }
@@ -254,13 +260,31 @@ const expirationMsgQueueHandler = async () => {
 
 
 const launch = () => {
-  const { timeToReadIotBroker, expirationVerifiction } = config;
+  if (!isRuning) return; // Si no está en marcha, no hacemos nada
 
-  // Leemos del broker IoT cada cierto tiempo
-  setInterval(readFromIotBrokerAndClassify, timeToReadIotBroker);
-  // Gestionamos la expiración de mensajes cada cierto tiempo
-  setInterval(expirationMsgQueueHandler, expirationVerifiction);
+  // Iniciamos los bucles recursivos
+  runClassificationLoop();
+  runExpirationLoop();
 }
+
+const runClassificationLoop = async () => {
+  if (!isRuning) return; // Condición de parada
+
+  await readFromIotBrokerAndClassify();
+
+  // Programamos la siguiente ejecución
+  classifyTimeout = setTimeout(runClassificationLoop, config.timeToReadIotBroker);
+}
+
+const runExpirationLoop = async () => {
+  if (!isRuning) return; // Condición de parada
+
+  await expirationMsgQueueHandler();
+
+  // Programamos la siguiente ejecución
+  expirationTimeout = setTimeout(runExpirationLoop, config.expirationVerifiction);
+}
+
 
 
 // Evento para escuchar los MENSAJES que SALEN del IOT-BROKER
@@ -290,6 +314,31 @@ const downloadCSV = async (name: string) => {
   });
 }
 
+const updateConfig = (newConfig: any) => {
+  config = { ...config, ...newConfig };
+
+  if (Object.keys(newConfig).includes('minPriority')) updateCategoriserStructure()
+  // console.log('Nuevo objeto config en el categoriser:', config);
+}
+
+const stopLaunch = () => {
+  if (classifyTimeout) clearTimeout(classifyTimeout);
+  if (expirationTimeout) clearTimeout(expirationTimeout);
+}
+
+const togglePlayPause = async (simulationIsRuning: boolean) => {
+  isRuning = simulationIsRuning; // El estado se gestiona desde el servicio de simulacion
+  if (!isRuning) {
+    stopLaunch();
+  }
+  else {
+    // await initializeWriters(false);
+    launch();
+
+  }
+  console.log(`CATEGORISER Worker: Sistema ${isRuning ? 'REANUDADO' : 'PAUSADO'}`);
+}
+
 // Evento para escuchar los MENSAJES que entran al CATEGORISER
 addEventListener('message', (event) => {
   const { type, payload } = event.data;
@@ -307,9 +356,21 @@ addEventListener('message', (event) => {
       initiliazeCategoriser();
       break;
 
+    case 'PLAY_PAUSE':
+      console.log('DETENIDO')
+      togglePlayPause(payload);
+      break;
+
+    case 'STOP':
+      isRuning = false;
+      stopLaunch();
+      console.log('Categoriser Worker: Sistema DETENIDO');
+
+      break;
+
     case 'CONFIGURE':
       console.log('Categoriser Worker: Sistema configurado');
-
+      updateConfig(payload)
       break;
 
     case 'DOWNLOAD_ONE_CSV':
