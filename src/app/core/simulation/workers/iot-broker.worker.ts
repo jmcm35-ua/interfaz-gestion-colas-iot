@@ -183,28 +183,33 @@ const configureCategoriserPort = () => {
     if (!isRuning) return;
 
     if (type === 'GET_MESSAGES') {
-      const numMsgsToExtract = payload?.num || 1000;
-      // Sacamos los mensajes de la cola interna
-      const extracted = msgQueue.splice(0, numMsgsToExtract);
-
-      // Escribimos en pathRestFile: {"Timestamp; Leidos por Classifier; Quedan en cola"}
-      const msgToWrite = `${numMsgsToExtract};${msgQueue.length}`;
-      writeLog(iotBrokerFilesName.fileNamePathRest, msgToWrite, true)
-
-      console.log('----------- ENVIANDO MENSAJES -----------')
-
-      // Enviamos los mensajes a simulation.service
-      categoriserPort.postMessage({
-        type: 'MESSAGES_PULLED',
-        messageId: messageId,
-        payload: {
-          messageInfo: 'Pull messages to Consumer',
-          messages: extracted,
-          queueSize: msgQueue.length // Enviamos el tamaño para debug
-        }
-      });
+      sendMessages(messageId, payload);
+    } else {
+      console.warn('Incorrect message Type')
     }
   };
+}
+
+const sendMessages = (messageId: number, numMsgsToExtract: number = 1000) => {
+  // Sacamos los mensajes de la cola interna
+  const extracted = msgQueue.splice(0, numMsgsToExtract);
+
+  // Escribimos en pathRestFile: {"Timestamp; Leidos por Classifier; Quedan en cola"}
+  const msgToWrite = `${numMsgsToExtract};${msgQueue.length}`;
+  writeLog(iotBrokerFilesName.fileNamePathRest, msgToWrite, true)
+
+  console.log('----------- ENVIANDO MENSAJES -----------')
+
+  // Enviamos los mensajes a simulation.service
+  categoriserPort.postMessage({
+    type: 'MESSAGES_PULLED',
+    messageId: messageId,
+    payload: {
+      messageInfo: 'Pull messages to Consumer',
+      messages: extracted,
+      queueSize: msgQueue.length // Enviamos el tamaño para debug
+    }
+  });
 }
 
 const initializeIotBroker = async () => {

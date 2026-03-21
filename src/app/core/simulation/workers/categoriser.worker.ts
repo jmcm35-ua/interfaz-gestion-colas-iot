@@ -5,10 +5,9 @@ import { CategoriserConfig } from "app/core/types/workers.types"
 import { FileStorageManager } from "../helpers/FileStorageManager.helper";
 import { FileObject } from "app/core/types/variables.types";
 import { categoriserFilesNames } from "app/core/constants/files.constant";
+import { RequestManager } from "../helpers/RequestMAnager.helper";
 
-let iotBrokerPort: MessagePort; // Conexion con el IoT Broker
-let messageIdCounter = 0; // Contador para identificar cada petición
-const pendingRequests = new Map<number, (data: any) => void>();
+let iotBrokerMessenger: RequestManager;
 
 const storage = new FileStorageManager();
 const MY_FILES: FileObject[] = [
@@ -124,26 +123,12 @@ const syncExpirationTimes = (targetSize: number): void => {
   }
 };
 
-const getIotMessages = (): Promise<any> => {
-  const { numMessages } = config;
+const getIotMessages = async (): Promise<any> => {
+  if (!iotBrokerMessenger) throw new Error('Puerto no conectado');
 
-  return new Promise((resolve, reject) => {
-    if (!iotBrokerPort) {
-      return reject('El puerto de comunicación aún no está establecido');
-    }
-
-    const idRequest = ++messageIdCounter;
-
-    // Guardamos la función 'resolve' asociada a este ID para llamarla luego y finalizar la ejecucion de la funcion
-    pendingRequests.set(idRequest, resolve);
-
-    // Enviamos el mensaje solicitando los mensajes al IoT Broker, incluyendo el ID del mensaje
-    iotBrokerPort.postMessage({
-      type: 'GET_MESSAGES',
-      messageInfo: 'GET messages from the IoT Broker',
-      messageId: idRequest,
-      numMessages: numMessages
-    });
+  // Enviamos y esperamos la respuesta de forma limpia a traves del PortMessenger
+  return await iotBrokerMessenger.request('GET_MESSAGES', {
+    num: config.numMessages
   });
 }
 
@@ -157,6 +142,8 @@ const readFromIotBrokerAndClassify = async () => {
     console.error("Unable to read from the IoT broker");
     return;
   }
+
+  console.log('RECIBIENDO MENSAJES DEL IOT-BROKER')
   const { messages, messageInfo, queueSize } = response;
 
   // Si no hay mensajes, salimos
@@ -287,24 +274,6 @@ const runExpirationLoop = async () => {
 
 
 
-// Evento para escuchar los MENSAJES que SALEN del IOT-BROKER
-const configureIotBrokerPort = () => {
-  iotBrokerPort.onmessage = ({ data }) => {
-    const { type, messageId, payload } = data;
-    if (type === 'MESSAGES_PULLED') {
-      const idResponse = messageId;
-      const messageBroker = payload;
-
-      // Buscamos si tenemos una Promesa esperando esta respuesta exacta
-      if (pendingRequests.has(idResponse)) {
-        const resolvePromese = pendingRequests.get(idResponse)!;
-        resolvePromese(messageBroker);
-        pendingRequests.delete(idResponse); // Limpiamos la memoria
-      }
-    }
-  }
-}
-
 const downloadCSV = async (name: string) => {
   const fileHandle = await storage.prepareForDownload(name);
   postMessage({
@@ -345,9 +314,9 @@ addEventListener('message', (event) => {
 
   switch (type) {
     case 'CONNECT_CHANNEL':
-      // Asignamos la conexion con el IoT Broker
-      iotBrokerPort = event.ports[0];
-      configureIotBrokerPort();
+      const port = event.ports[0];
+      // Inicializamos el messenger con el puerto del IoT-Broker y le decimos que espere respuestas tipo 'MESSAGES_PULLED'
+      iotBrokerMessenger = new RequestManager(port, 'MESSAGES_PULLED');
 
       break;
 
