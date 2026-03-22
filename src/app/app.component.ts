@@ -12,6 +12,7 @@ import { FuseMediaWatcherService } from '@fuse/services/media-watcher';
 import { Subject, takeUntil } from 'rxjs';
 import { MatDrawerContainer, MatDrawer, MatDrawerContent } from "@angular/material/sidenav";
 import { MatTooltipModule } from '@angular/material/tooltip';
+import { SimulationService } from './core/simulation/simulation.service';
 
 
 @Component({
@@ -23,6 +24,10 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 })
 export class AppComponent {
     @Input() tooltip: string | undefined;
+
+    textoAccionPlayPause: string = 'Iniciar simulación';
+    isSimulating = false;
+    isInitialized = false;
 
     title = 'Simulador';
 
@@ -36,7 +41,17 @@ export class AppComponent {
     drawerOpened: boolean = true;
     private _unsubscribeAll: Subject<any> = new Subject<any>();
 
-    constructor(private _fuseMediaWatcherService: FuseMediaWatcherService) {
+    toggleStateSimulation() {
+        // if (!this.isInitialized) {
+        //   this.simulationService.startSimulation();
+        //   this.isInitialized = true;
+        // }
+        // this.isSimulating = !this.isSimulating;
+        this.simulationService.handleStateSimulation(); // Aqui se gestiona si esta inicializada la simulacion o en ejecucion/pausa
+
+    }
+
+    constructor(private _fuseMediaWatcherService: FuseMediaWatcherService, private simulationService: SimulationService) {
     }
 
     // Esto controla el panel deslizante de Configuration con el componente que nos ofrece la plantilla de Fuse Angular

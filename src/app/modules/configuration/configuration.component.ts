@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { Component, EventEmitter, Input, Output } from '@angular/core';
+import { Component, EventEmitter, Input, OnDestroy, OnInit, Output } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatFormFieldModule } from '@angular/material/form-field';
@@ -10,6 +10,7 @@ import { FormsModule, UntypedFormGroup } from '@angular/forms';
 import { FuseConfirmationService } from '@fuse/services/confirmation/confirmation.service';
 import { SimulationService } from 'app/core/simulation/simulation.service';
 import { Variables } from 'app/core/types/variables.types';
+import { Subscription } from 'rxjs';
 
 @Component({
   selector: 'app-configuration',
@@ -18,9 +19,10 @@ import { Variables } from 'app/core/types/variables.types';
   templateUrl: './configuration.component.html',
   styleUrls: ['./configuration.component.scss'],
 })
-export class ConfigurationComponent {
+export class ConfigurationComponent implements OnInit, OnDestroy {
   @Output() close: EventEmitter<void> = new EventEmitter<void>();
   @Input() tooltip: string | undefined;
+  private subToInitalizedSim: Subscription | undefined;
 
   simulationRunning: boolean = true;
 
@@ -81,6 +83,30 @@ export class ConfigurationComponent {
     private simulationService: SimulationService // Inyectamos el servicio del simulador
   ) { }
 
+  ngOnInit() {
+    this.lastConfiguration = {
+      iotBroker: this.extractValues(this.variablesIotBroker),
+      categoriser: this.extractValues(this.variablesCategoriser),
+      dispatcher: this.extractValues(this.variablesDispatcher),
+      consumer: this.extractValues(this.variablesConsumer)
+    };
+    this.updateTotal(false);
+    this.applyConfiguration();
+
+    // Nos suscribimos a los cambios de la variable
+    this.subToInitalizedSim = this.simulationService.isInitialized$.subscribe(isInit => {
+      this.simulationRunning = isInit;
+    });
+  }
+
+  ngOnDestroy() {
+    // ¡Muy importante limpiar la suscripción para evitar memory leaks!
+    if (this.subToInitalizedSim) {
+      this.subToInitalizedSim.unsubscribe();
+    }
+  }
+
+
   closePanel() {
     console.log("Closing panel");
     this.close.emit();
@@ -92,16 +118,6 @@ export class ConfigurationComponent {
 
   totalWeight = 1;
 
-  ngOnInit() {
-    this.lastConfiguration = {
-      iotBroker: this.extractValues(this.variablesIotBroker),
-      categoriser: this.extractValues(this.variablesCategoriser),
-      dispatcher: this.extractValues(this.variablesDispatcher),
-      consumer: this.extractValues(this.variablesConsumer)
-    };
-    this.updateTotal(false);
-    this.applyConfiguration();
-  }
 
   //************************************************************
   //! Funciones para verificar los datos de la configuracion
@@ -344,7 +360,29 @@ export class ConfigurationComponent {
     }
 
     if (!file?.name.endsWith('.json')) {
-      alert("Solo se permiten archivos JSON");
+      const dialogRef = this._fuseConfirmationService.open({
+        "title": "Error al importar la configuración",
+        "message": "Solo se permiten archivos de formato JSON.",
+        "icon": {
+          "show": true,
+          "name": "heroicons_solid:exclamation-circle",
+          "color": "error"
+        },
+        "actions": {
+          "confirm": {
+            "show": false,
+            "label": "",
+            "color": "primary"
+          },
+          "cancel": {
+            "show": true,
+            "label": "Continuar"
+          }
+        },
+        "dismissible": true
+      }).afterClosed().subscribe((result) => {
+        return;
+      });
       return;
     }
 
