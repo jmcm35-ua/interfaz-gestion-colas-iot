@@ -180,10 +180,11 @@ const configureCategoriserPort = () => {
   categoriserPort.onmessage = ({ data }) => {
     const { type, messageId, payload } = data;
 
+    console.log({ type, messageId, payload })
     if (!isRuning) return;
 
     if (type === 'GET_MESSAGES') {
-      sendMessages(messageId, payload);
+      sendMessages(messageId, payload.num);
     } else {
       console.warn('Incorrect message Type')
     }
@@ -191,6 +192,7 @@ const configureCategoriserPort = () => {
 }
 
 const sendMessages = (messageId: number, numMsgsToExtract: number = 1000) => {
+  console.log({ messageId, numMsgsToExtract })
   // Sacamos los mensajes de la cola interna
   const extracted = msgQueue.splice(0, numMsgsToExtract);
 

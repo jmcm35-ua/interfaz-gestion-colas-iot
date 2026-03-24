@@ -3,6 +3,7 @@ import { inject, Injectable } from '@angular/core';
 import { iotBrokerFilesName, categoriserFilesNames, dispatcherFilesNames, consumerFilesNames } from 'app/core/constants/files.constant'
 import JSZip from 'jszip'; // Libreria para generar los ZIPs
 import { BehaviorSubject } from 'rxjs';
+import { Communication } from '../constants/communication.constant';
 
 @Injectable({
   providedIn: 'root'
@@ -74,16 +75,25 @@ export class SimulationService {
       }
 
       if (newConfig?.categoriser || changePriorityQueues) {
-        console.log('ENTRO AQUI')
         //Damos formato al objeto config del Categoriser
         console.log(newConfig)
         const configToSendCategoriser = newConfig?.categoriser ? this.prepareObjectConfig(newConfig.categoriser) : {};
 
         if (changePriorityQueues) {
-          configToSendCategoriser['minPriority'] = this.lastPriorityLength
+          configToSendCategoriser['minPriority'] = this.lastPriorityLength;
         }
         console.log({ configToSendCategoriser })
         this.categoriserWorker.postMessage({ type: 'CONFIGURE', payload: configToSendCategoriser });
+      }
+
+      if (newConfig?.dispatcher || changePriorityQueues) {
+        const configToSendDispatcher = newConfig?.dispatcher ? this.prepareObjectConfig(newConfig.dispatcher) : {};
+
+        if (changePriorityQueues) {
+          configToSendDispatcher['minPriority'] = this.lastPriorityLength;
+        }
+        console.log({ configToSendDispatcher })
+        this.dispatcherWorker.postMessage({ type: 'CONFIGURE', payload: configToSendDispatcher });
       }
 
 
@@ -188,6 +198,10 @@ export class SimulationService {
       this.iotBrokerWorker.postMessage({ type: 'PLAY_PAUSE', payload: isPlaying });
 
       this.categoriserWorker.postMessage({ type: 'PLAY_PAUSE', payload: isPlaying });
+
+      this.dispatcherWorker.postMessage({ type: 'PLAY_PAUSE', payload: isPlaying });
+
+
     } catch (error) {
       this.toggleInitializedSimulation(false);
       console.error(`Se ha producido un error al poner en ${this.isRuning$ ? 'PLAY' : 'PAUSE'} la simulacion: ` + error);
@@ -202,6 +216,7 @@ export class SimulationService {
 
       this.iotBrokerWorker.postMessage({ type: 'START' });
       this.categoriserWorker.postMessage({ type: 'START' });
+      this.dispatcherWorker.postMessage({ type: 'START' });
 
     } catch (error) {
       this.toggleInitializedSimulation(false);
@@ -209,33 +224,39 @@ export class SimulationService {
     }
   }
 
-  private initIotBroker = () => {
-    if (this.iotBrokerWorker) return;
-
-    this.iotBrokerWorker = new Worker(
-      new URL('./workers/iot-broker.worker', import.meta.url)
-    );
-
-  }
 
   private initWorkers() {
-    this.initIotBroker();
+
+    if (!this.iotBrokerWorker)
+      this.iotBrokerWorker = new Worker(
+        new URL('./workers/iot-broker.worker', import.meta.url)
+      );
 
     if (!this.categoriserWorker)
       this.categoriserWorker = new Worker(
         new URL('./workers/categoriser.worker', import.meta.url)
       );
 
+    if (!this.dispatcherWorker)
+      this.dispatcherWorker = new Worker(
+        new URL('./workers/dispatcher.worker', import.meta.url)
+      );
+
+
+
+
 
     // Creamos un canal de comunicacion gracias a MessageChannel.
+    // El primero se entiende que es el emisor, y el segundo el receptor
     this.createChannel(this.iotBrokerWorker, this.categoriserWorker);
+    this.createChannel(this.categoriserWorker, this.dispatcherWorker);
   }
 
   private createChannel(firstWorker: Worker, secondWorker: Worker) {
     const channel = new MessageChannel();
 
-    firstWorker.postMessage({ type: 'CONNECT_CHANNEL' }, [channel.port1]);
-    secondWorker.postMessage({ type: 'CONNECT_CHANNEL' }, [channel.port2]);
+    firstWorker.postMessage({ type: 'CONNECT_CHANNEL', payload: Communication.emisor }, [channel.port1]);
+    secondWorker.postMessage({ type: 'CONNECT_CHANNEL', payload: Communication.receptor }, [channel.port2]);
     console.log('Service: Canal directo establecido entre Broker y Categoriser.');
   }
 }

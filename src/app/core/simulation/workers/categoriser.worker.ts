@@ -5,9 +5,11 @@ import { CategoriserConfig } from "app/core/types/workers.types"
 import { FileStorageManager } from "../helpers/FileStorageManager.helper";
 import { FileObject } from "app/core/types/variables.types";
 import { categoriserFilesNames } from "app/core/constants/files.constant";
-import { RequestManager } from "../helpers/RequestMAnager.helper";
+import { RequestManager } from "../helpers/RequestManager.helper";
+import { Communication } from "app/core/constants/communication.constant";
 
 let iotBrokerMessenger: RequestManager;
+let dispatcherPort: MessagePort; // Conexion con el Categoriser
 
 const storage = new FileStorageManager();
 const MY_FILES: FileObject[] = [
@@ -28,7 +30,6 @@ const MY_FILES: FileObject[] = [
     header: ""
   }
 ];
-
 
 let config: CategoriserConfig = {
   maxPriority: 1, // Maxima prioridad
@@ -53,12 +54,12 @@ const writeLog = (fileName: string, message: string, printTimestamp: boolean = t
 };
 
 const initiliazeCategoriser = async () => {
-  isRuning = true;
   initialTimestamp = Date.now(); // Cuando se inicia el sistema
   // ToDo: hay que inicializar baseExpirationTime dependiendo del número de colas
   // Incializamos cada cola a una lista vacía y los expiration time
   await storage.init(MY_FILES);
   updateCategoriserStructure();
+  isRuning = true;
   launch(); // Comienza el ciclo de lectura y categorizacion
 }
 
@@ -84,7 +85,6 @@ const updateCategoriserStructure = (): void => {
 
   syncMessageQueues(minPriority);
   syncExpirationTimes(minPriority);
-
 
   preprareHeaders();
 
@@ -125,7 +125,7 @@ const syncExpirationTimes = (targetSize: number): void => {
 
 const getIotMessages = async (): Promise<any> => {
   if (!iotBrokerMessenger) throw new Error('Puerto no conectado');
-
+  console.log(config.numMessages)
   // Enviamos y esperamos la respuesta de forma limpia a traves del PortMessenger
   return await iotBrokerMessenger.request('GET_MESSAGES', {
     num: config.numMessages
@@ -142,6 +142,8 @@ const readFromIotBrokerAndClassify = async () => {
     console.error("Unable to read from the IoT broker");
     return;
   }
+
+  console.log({ response })
 
   console.log('RECIBIENDO MENSAJES DEL IOT-BROKER')
   const { messages, messageInfo, queueSize } = response;
@@ -185,8 +187,8 @@ const readFromIotBrokerAndClassify = async () => {
 
 const showQueuesStatus = () => {
   const { priorityMsgQueues, priorityExpirationTimeQueue, expirationMsgQueue } = config;
-  // console.log("-----------------------------------------------------");
-  // console.log("Status of priority queues after reading from the IoT broker:");
+  console.log("-----------------------------------------------------");
+  console.log("Status of priority queues after reading from the IoT broker:");
   let msg = "Expiration: "
   for (let i = 0; i < priorityMsgQueues.length; i++) {
     msg += "P" + (i + 1) + ":" + priorityExpirationTimeQueue[i] + "ms ";
@@ -199,9 +201,9 @@ const showQueuesStatus = () => {
     msg += "Queue: " + (i + 1) + " : " + priorityMsgQueues[i].length + " ";
     txt += priorityMsgQueues[i].length + ";";
   }
-  // console.log(msg);
-  // console.log("expiredQueue ", expirationMsgQueue.length, " msg.");
-  // console.log("-----------------------------------------------------");
+  console.log(msg);
+  console.log("expiredQueue ", expirationMsgQueue.length, " msg.");
+  console.log("-----------------------------------------------------");
   // "Timestamp; Q1; Q2; Q3; Q4; Expirados"
   writeLog(categoriserFilesNames.fileNameStatus, txt + expirationMsgQueue.length, true)
 }
@@ -210,8 +212,8 @@ const showQueuesStatus = () => {
 // Recorremos todas las colas
 const expirationMsgQueueHandler = async () => {
   const { priorityMsgQueues, priorityExpirationTimeQueue, expirationMsgQueue, expirationMaxQueueMsg } = config;
-  // console.log("************ Checking message expirations ************");
-  const now = Date.now() - initialTimestamp;
+  console.log("************ Checking message expirations ************");
+  const now = Date.now();
   let expiredCount = 0;
   let totalExpired = 0;
   let reg = "";
@@ -221,8 +223,7 @@ const expirationMsgQueueHandler = async () => {
 
     while (msgQueue.length > 0 && (now - msgQueue[0].timestamp) > priorityExpirationTimeQueue[index]) {
       // extaemos el mensaje expirado y lo añadimos a la cola de expiraciones
-      const expiredMsg = msgQueue.shift();
-      //console.log(now," Expirado mensaje ", expiredMsg, " tiempo ", now - expiredMsg.timestamp , " la cola prioridad ",i," ahora tiene ", priorityMsgQueues[i].length, " mensajes y expriedQ ",expirationMsgQueue.length);
+      const expiredMsg: Message | undefined = msgQueue.shift();
       expirationMsgQueue.push(expiredMsg as Message);
       expiredCount++;
     }
@@ -244,7 +245,69 @@ const expirationMsgQueueHandler = async () => {
 
 }
 
+const sendMessagesToDispatcher = (messageId: number, payload: any) => {
+  try {
+    const { minPriority, maxPriority } = config;
+    const { numMsgs, priority } = payload;
 
+    // Si la prioridad indicada no es válida, devolvemos error
+    if (priority < 0 || priority > minPriority) {
+      // return res.status(400).json({ errors: [{ msg: 'priority It must be a number between 0 and ' + minPriority + '.' }] });
+    }
+
+    console.log({ numMsgs, priority, maxPriority, payload })
+    // desencolo de la cola de prioridad de mensajes tantos mensajes como dice num
+    // extraemos los mensajes del principio de la cola, los más antiguos
+    let returnMsg = [];
+    let msgRes = "";
+    if (config.priorityMsgQueues || config.expirationMsgQueue) {
+      if (priority > 0) {
+        console.log(config)
+        returnMsg = config.priorityMsgQueues[priority - 1].splice(0, numMsgs);
+        console.log('Dequeue', numMsgs, 'items from Q', priority, '. Remaining ', config.priorityMsgQueues[priority - 1].length, ' messages in the queue.');
+        msgRes = "Extract from Q" + priority;
+      } else {
+        // prioridad 0 indica la cola de expiración
+        returnMsg = config.expirationMsgQueue.splice(0, numMsgs);
+        console.log('Dequeue', numMsgs, 'items from EXPIRATION queue. Remainingn ', config.expirationMsgQueue.length, ' queue items.');
+        msgRes = "Extract from EXPIRATION";
+      }
+
+    }
+
+    //""Timestamp; Pedidos por  Dispatcher; Leidos por Dispatcher; Cola Leida; Quedan Cola P1; Quedan Cola P2; Quedan Cola P3; Quedan Cola P4, Quedan Cola Expirados""
+    let msg = "";
+    for (let i = maxPriority; i <= minPriority; i++) {
+      msg += "Remaining Q" + config.priorityMsgQueues[i - 1].length + ";";
+    }
+
+    writeLog(categoriserFilesNames.fileNameREST, numMsgs + ";" + returnMsg.length + ";" + priority + ";" + msg + config.expirationMsgQueue.length, true)
+
+    dispatcherPort.postMessage({
+      type: 'MESSAGES_PULLED',
+      code: 200,
+      messageId: messageId,
+      payload: {
+        messageInfo: 'Pull messages to Dispatcher',
+        message: msgRes,
+        data: 'num: ' + numMsgs + ' priority:' + priority,
+        messagesExtracted: returnMsg,
+        numMsgExtracted: returnMsg.length
+      }
+    });
+  } catch (error) {
+    console.error("ERRRORRRRR" + error);
+    // dispatcherPort.postMessage({
+    //   type: 'MESSAGES_PULLED',
+    //   code: 400,
+    //   messageId: messageId,
+    //   payload: {
+    //     messageInfo: 'Error pulling messages to Dispatcher',
+    //     message: []
+    //   }
+    // });
+  }
+}
 
 const launch = () => {
   if (!isRuning) return; // Si no está en marcha, no hacemos nada
@@ -272,6 +335,31 @@ const runExpirationLoop = async () => {
   expirationTimeout = setTimeout(runExpirationLoop, config.expirationVerifiction);
 }
 
+const configureCategoriserPort = () => {
+  dispatcherPort.onmessage = ({ data }) => {
+
+    const { type, messageId, payload } = data;
+
+    if (!isRuning) {
+      dispatcherPort.postMessage({
+        type: 'MESSAGES_PULLED',
+        code: 200,
+        messageId: messageId,
+        payload: { numMsgExtracted: 0, messagesExtracted: [] }
+      });
+      return;
+    }
+
+
+    if (!isRuning) return;
+
+    if (type === 'GET_MESSAGES') {
+      sendMessagesToDispatcher(messageId, payload);
+    } else {
+      console.warn('Incorrect message Type')
+    }
+  };
+}
 
 
 const downloadCSV = async (name: string) => {
@@ -315,8 +403,15 @@ addEventListener('message', (event) => {
   switch (type) {
     case 'CONNECT_CHANNEL':
       const port = event.ports[0];
-      // Inicializamos el messenger con el puerto del IoT-Broker y le decimos que espere respuestas tipo 'MESSAGES_PULLED'
-      iotBrokerMessenger = new RequestManager(port, 'MESSAGES_PULLED');
+      if (payload === Communication.receptor) {
+        // Inicializamos el messenger con el puerto del IoT-Broker y le decimos que espere respuestas tipo 'MESSAGES_PULLED'
+        iotBrokerMessenger = new RequestManager(port, 'MESSAGES_PULLED');
+      } else {
+
+        // Inicializamos el puerto de comunicacion con el Dispatcher
+        dispatcherPort = port;
+        configureCategoriserPort();
+      }
 
       break;
 

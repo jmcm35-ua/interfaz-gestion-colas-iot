@@ -13,7 +13,8 @@ export const categoriserFilesNames = {
 }
 
 export const dispatcherFilesNames = {
-
+    fileNameDispatcher: 'dispatcher.csv',
+    fileNameREST: 'dispatcher_REST.csv'
 }
 
 export const consumerFilesNames = {

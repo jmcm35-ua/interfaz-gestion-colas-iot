@@ -63,12 +63,12 @@ export class ConfigurationComponent implements OnInit, OnDestroy {
   variablesDispatcher: Variables[] = [
     { name: 'maxSortQueue', value: -1, text: 'Número de colas priorizadas', minimum: -1, maximum: 20, input: true },
     { name: 'numMessages', value: 1000, text: 'Mensajes a solicitar del Categoriser', minimum: 1, maximum: 1000000, input: true },
-    { name: 'tiempoLectura', value: 1000, text: 'Tiempo a esperar entre lecturas (ms)', minimum: 100, maximum: 10000000, input: true },
+    { name: 'timeToReadCategoriser', value: 1000, text: 'Tiempo a esperar entre lecturas (ms)', minimum: 100, maximum: 10000000, input: true },
   ]
 
   variablesConsumer: Variables[] = [
     { name: 'num', value: 1000, text: 'Mensajes que se sirven al sistema', minimum: 1, maximum: 1000000, input: true },
-    { name: 'timeLectura', value: 1000, text: 'Tiempo a esperar entre lecturas (ms)', minimum: 100, maximum: 10000000, input: true },
+    { name: 'timeToReadDispatcher', value: 1000, text: 'Tiempo a esperar entre lecturas (ms)', minimum: 100, maximum: 10000000, input: true },
   ]
 
   isOpen = {

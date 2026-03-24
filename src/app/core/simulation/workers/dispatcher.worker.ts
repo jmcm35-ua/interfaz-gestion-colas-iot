@@ -1,6 +1,269 @@
 /// <reference lib="webworker" />
 
-addEventListener('message', ({ data }) => {
-  const response = `worker response to ${data}`;
-  postMessage(response);
+import { FileObject } from 'app/core/types/variables.types';
+import { DispatcherConfig } from '../../types/workers.types'
+import { FileStorageManager } from '../helpers/FileStorageManager.helper';
+import { RequestManager } from '../helpers/RequestManager.helper';
+import { dispatcherFilesNames } from 'app/core/constants/files.constant';
+import { Message } from 'app/core/types/messages.types';
+import { Communication } from 'app/core/constants/communication.constant';
+
+
+let categoriserMessenger: RequestManager;
+
+const storage = new FileStorageManager();
+const MY_FILES: FileObject[] = [
+  {
+    name: dispatcherFilesNames.fileNameDispatcher,
+    header: ""
+  },
+  {
+    name: dispatcherFilesNames.fileNameREST,
+    header: "Timestamp; Orders ; Extracted; Remaining"
+  }
+];
+
+let iniTimestamp = Date.now();
+
+let powerPriority: number[] = [];
+let msgPerPriority: number[] = [];
+let sortPriorityQueue: Message[] = [];
+
+let isRuning: boolean = false;
+let readAndSortTimeout: any;
+
+let config: DispatcherConfig = {
+  maxSortQueue: -1,
+  numMessages: 1000,
+  timeToReadCategoriser: 1000,
+  minPriority: 4
+}
+
+const writeLog = (fileName: string, message: string, printTimestamp: boolean = true) => {
+  storage.write(fileName, iniTimestamp, message, printTimestamp);
+};
+
+// Cramos el array de powerPriority dando más prioridad a la cola 1, la mitad a la 2, la mitad a la 3... y luego convertimos eso en mensjaes de numMessages
+const configurePowerPriority = () => {
+  const { minPriority } = config;
+  let totalPower = 0;
+  powerPriority = [];
+
+  powerPriority.push(1)
+  totalPower += 1;
+  for (let i = 1; i < minPriority; i++) {
+    powerPriority.push(powerPriority[i - 1] / 2);
+    totalPower += powerPriority[i];
+  }
+  console.log("Power Priority: ", powerPriority);
+  return totalPower;
+}
+
+const configureMsgPerPriority = () => {
+  const { numMessages, minPriority } = config;
+
+  let rest = numMessages;
+  let totalPowerPriority = configurePowerPriority();
+
+  for (let i = 0; i < minPriority - 1; i++) {
+    msgPerPriority.push(Math.round((powerPriority[i] / totalPowerPriority) * numMessages));
+    rest -= msgPerPriority[i];
+  }
+
+  msgPerPriority.push(rest);
+  console.log("Messages per Priority: ", msgPerPriority);
+}
+
+
+/****
+ * Función que lee de cada cola, en función del power que tiene definido
+ * y mete los mensajes en la cola priorizada
+ * si lee menos mensajes de los solicitados, acumula a la siguiente cola el número de mensajes
+ * y si quedan mensajes, lee de la de expirados
+ */
+const readAndSort = async () => {
+  const { minPriority, maxSortQueue } = config;
+  let totalRead = 0;
+  let remaining = 0;
+  let reg = "";
+
+  let msg = "******************* readAndSort *******************\nRead from Queues: [" + msgPerPriority[0];
+  for (let i = 1; i < minPriority; i++) { msg += ',' + msgPerPriority[i] }
+  msg += "]";
+  // console.clear();
+  console.log(msg);
+  for (let i = 0; i < minPriority; i++) {
+    // leemos mensajes de la cola de prioridad i+1
+    //     la estructura devuelta estructura{ 
+    //   message: 'Extraer mensajes de la cola prioridad' + priority,
+    //   data: 'num: ' + num + ' priority:' + priority,
+    //   mensajes: returnMsg,
+    //   numMsg: returnMsg.length
+    remaining += msgPerPriority[i];
+    const data = await getClassifierMessage(remaining, i + 1);
+    if (!data) {
+      console.error("It has not been possible to read from the Categoriser");
+      return;
+    }        // Calculamos si ha sobrado potencia
+    const { numMsgExtracted, messagesExtracted } = data;
+
+    reg += (i + 1) + ";" + powerPriority[i] + ";" + msgPerPriority[i] + ";" + remaining + ";" + numMsgExtracted + ";";
+    remaining -= numMsgExtracted;
+    // Acumulamos el total de mensajes leidos
+    totalRead += numMsgExtracted;
+    console.log('Read from Categoriser priorityQueue ', i + 1, ':', numMsgExtracted, ' remaining: ', remaining)
+    // Metemos los mensajes leidos en la cola ordenada de prioridad
+    if (numMsgExtracted > 0) {
+      messagesExtracted.forEach((msg: Message) => {
+        sortPriorityQueue.push(msg)
+      });
+    }
+
+    // Limitamos el tamaño de la cola priorizada a maxSortQueu o si -1 ignoramos el límite
+    if (maxSortQueue > 0 && sortPriorityQueue.length > maxSortQueue) {
+      sortPriorityQueue.splice(0, sortPriorityQueue.length - maxSortQueue)
+    }
+  }
+
+  // si han quedado en remaining mensajes por leer, los leemos de la cola de expirados
+  let dataExp;
+  if (remaining > 0) {
+    dataExp = await getClassifierMessage(remaining, 0);
+
+    if (dataExp) {
+      const { numMsgExtracted: numMessagesExpired, messagesExtracted: messagesExpired } = dataExp;
+      totalRead += numMessagesExpired;
+      // Metemos los mensajes leidos en la cola ordenada de prioridad
+      if (numMessagesExpired > 0) {
+        messagesExpired.forEach((msg: Message) => {
+          sortPriorityQueue.push(msg)
+        });
+      }
+      reg += "0;" + remaining + ";" + numMessagesExpired + ";" + (remaining - numMessagesExpired);
+      remaining -= numMessagesExpired;
+      console.log(`Read ${numMessagesExpired} messages from the Expiration queue. Remaining ${remaining} unread messages.`);
+
+    } else {
+      reg += "0;" + remaining + ";0;" + remaining;
+    }
+  } else {
+    reg += "0;" + remaining + ";0;" + remaining;
+  }
+  writeLog(dispatcherFilesNames.fileNameDispatcher, reg, true);
+
+  console.log("\nTotal messages read and placed in the prioritised queue: ", totalRead);
+  console.log("Current size of the prioritised queue: ", sortPriorityQueue.length);
+  console.log("******************* END readAndSoft *******************\n\n");
+}
+
+const getClassifierMessage = async (numMsgsToExtract: number, priorityMessages: number): Promise<any> => {
+  if (!categoriserMessenger) throw new Error('Puerto no conectado');
+
+  // Enviamos y esperamos la respuesta de forma limpia a traves del PortMessenger
+  return await categoriserMessenger.request('GET_MESSAGES', {
+    numMsgs: numMsgsToExtract,
+    priority: priorityMessages
+  });
+}
+
+const downloadCSV = async (name: string) => {
+  const fileHandle = await storage.prepareForDownload(name);
+  postMessage({
+    type: 'DOWNLOAD_FINISHED',
+    payload: fileHandle,
+    filename: name
+  });
+}
+
+const updateConfig = (newConfig: any) => {
+  config = { ...config, ...newConfig };
+
+  if (Object.keys(newConfig).includes('minPriority')) configureMsgPerPriority()
+  // console.log('Nuevo objeto config en el categoriser:', config);
+}
+
+const launch = () => {
+  runReadAndSortLoop();
+}
+
+const runReadAndSortLoop = async () => {
+  if (!isRuning) return; // Condición de parada
+  console.log("READINGG")
+  await readAndSort();
+
+  // Programamos la siguiente ejecución
+  readAndSortTimeout = setTimeout(runReadAndSortLoop, config.timeToReadCategoriser);
+}
+
+const initiliazeDispatcher = async () => {
+  isRuning = true;
+  iniTimestamp = Date.now();
+  await storage.init(MY_FILES);
+  configureMsgPerPriority();
+  launch();
+}
+
+const stopLaunch = () => {
+  if (readAndSortTimeout) clearTimeout(readAndSortTimeout);
+}
+
+const togglePlayPause = async (simulationIsRuning: boolean) => {
+  isRuning = simulationIsRuning; // El estado se gestiona desde el servicio de simulacion
+  if (!isRuning) {
+    stopLaunch();
+  }
+  else {
+    // await initializeWriters(false);
+    launch();
+
+  }
+  console.log(`CATEGORISER Worker: Sistema ${isRuning ? 'REANUDADO' : 'PAUSADO'}`);
+}
+
+// Evento para escuchar los MENSAJES que entran al CATEGORISER
+addEventListener('message', (event) => {
+  const { type, payload } = event.data;
+
+  switch (type) {
+    case 'CONNECT_CHANNEL':
+      const port = event.ports[0];
+
+      if (payload === Communication.receptor) {
+        // Inicializamos el messenger con el puerto del Categoriser y le decimos que espere respuestas tipo 'MESSAGES_PULLED'
+        categoriserMessenger = new RequestManager(port, 'MESSAGES_PULLED');
+      } else {
+
+        // Inicializamos el puerto de comunicacion con el Consumer
+        // consumerPort = port;
+      }
+
+      break;
+
+    case 'START':
+      console.log('DISPATCHER Worker: Sistema iniciado');
+      initiliazeDispatcher();
+      break;
+
+    case 'PLAY_PAUSE':
+      console.log('DETENIDO')
+      togglePlayPause(payload);
+      break;
+
+    case 'STOP':
+      isRuning = false;
+      stopLaunch();
+      console.log('DISPATCHER Worker: Sistema DETENIDO');
+
+      break;
+
+    case 'CONFIGURE':
+      console.log('DISPATCHER Worker: Sistema configurado');
+      updateConfig(payload)
+      break;
+
+    case 'DOWNLOAD_ONE_CSV':
+
+      downloadCSV(payload);
+      break;
+  }
 });

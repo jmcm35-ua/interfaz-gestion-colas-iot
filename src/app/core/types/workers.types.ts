@@ -13,3 +13,10 @@ export interface CategoriserConfig {
     numMessages: number;
     timeToReadIotBroker: number;
 }
+
+export interface DispatcherConfig {
+    maxSortQueue: number
+    numMessages: number;
+    timeToReadCategoriser: number;
+    minPriority: number;
+}
