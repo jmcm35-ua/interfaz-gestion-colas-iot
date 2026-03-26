@@ -11,7 +11,7 @@ import { ConsumerConfig } from "app/core/types/workers.types";
 
 let dispatcherMessenger: RequestManager; // Conexion con el Dispatcher
 
-const storage = new FileStorageManager();
+const storageFiles = new FileStorageManager();
 const MY_FILES: FileObject[] = [
   {
     name: consumerFilesNames.fileNameConsumer,
@@ -36,7 +36,7 @@ let config: ConsumerConfig = {
 }
 
 const writeLog = (fileName: string, message: string, printTimestamp: boolean = true) => {
-  storage.write(fileName, iniTimestamp, message, printTimestamp);
+  storageFiles.write(fileName, iniTimestamp, message, printTimestamp);
 };
 
 const preprareHeaders = () => {
@@ -54,7 +54,7 @@ const updatePriorityMessages = () => {
   const currentSize = readMsgPriority.length;
 
   if (targetSize > currentSize) {
-    const newQueues = Array.from({ length: targetSize - currentSize }, () => []);
+    const newQueues = Array.from({ length: targetSize - currentSize }, () => 0);
     readMsgPriority.push(...newQueues);
   } //! Si se hace más pequeño no deberiamos de eliminar as existentes...
 
@@ -102,7 +102,7 @@ const consumeMessages = async () => {
     register += readMsgPriority[i] + ';';
   }
 
-  console.log(`Total read ${readMsgPriority[minPriority]} messages.`);
+  // console.log(`Total read ${readMsgPriority[minPriority]} messages.`);
   writeLog(consumerFilesNames.fileNameConsumerBatch, register, true);
 }
 
@@ -122,14 +122,14 @@ const runConsumeMessagesLoop = async () => {
 const initializeConsumer = async () => {
   // Iniciamos el tiempo
   iniTimestamp = Date.now();
-  await storage.init(MY_FILES);
+  await storageFiles.init(MY_FILES);
   updatePriorityMessages();
   isRuning = true;
   launch();
 }
 
 const downloadCSV = async (name: string) => {
-  const fileHandle = await storage.prepareForDownload(name);
+  const fileHandle = await storageFiles.prepareForDownload(name);
   postMessage({
     type: 'DOWNLOAD_FINISHED',
     payload: fileHandle,
@@ -140,14 +140,20 @@ const downloadCSV = async (name: string) => {
 const togglePlayPause = async (simulationIsRuning: boolean) => {
   isRuning = simulationIsRuning; // El estado se gestiona desde el servicio de simulacion
   if (!isRuning) {
-    // closeWriters();
-    if (consumeMessagesTimeout) clearTimeout(consumeMessagesTimeout);
+    stopLaunch();
   }
   else {
     launch();
 
   }
   console.log(`CONSUMER Worker: Sistema ${isRuning ? 'REANUDADO' : 'PAUSADO'}`);
+}
+
+const stopLaunch = (endSimulation: boolean = false) => {
+  isRuning = false;
+  if (consumeMessagesTimeout) clearTimeout(consumeMessagesTimeout);
+
+  if (endSimulation) storageFiles.closeAll();
 }
 
 const updateConfig = (newConfig: any) => {
@@ -178,8 +184,7 @@ addEventListener('message', (event) => {
 
     // ToDo: Incluir la funcionalidad para STOP, PAUSE y CONFIGURE
     case 'STOP':
-      isRuning = false;
-      if (consumeMessagesTimeout) clearTimeout(consumeMessagesTimeout);
+      stopLaunch(true);
       console.log('CONSUMER Worker: Sistema DETENIDO');
       break;
 

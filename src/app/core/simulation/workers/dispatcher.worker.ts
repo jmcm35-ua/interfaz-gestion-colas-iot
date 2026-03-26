@@ -12,7 +12,7 @@ import { Communication } from 'app/core/constants/communication.constant';
 let categoriserMessenger: RequestManager;
 let consumerPort: MessagePort;
 
-const storage = new FileStorageManager();
+const storageFiles = new FileStorageManager();
 const MY_FILES: FileObject[] = [
   {
     name: dispatcherFilesNames.fileNameDispatcher,
@@ -41,7 +41,7 @@ let config: DispatcherConfig = {
 }
 
 const writeLog = (fileName: string, message: string, printTimestamp: boolean = true) => {
-  storage.write(fileName, iniTimestamp, message, printTimestamp);
+  storageFiles.write(fileName, iniTimestamp, message, printTimestamp);
 };
 
 // Cramos el array de powerPriority dando más prioridad a la cola 1, la mitad a la 2, la mitad a la 3... y luego convertimos eso en mensjaes de numMessages
@@ -62,6 +62,8 @@ const configurePowerPriority = () => {
 
 const configureMsgPerPriority = () => {
   const { numMessages, minPriority } = config;
+
+  msgPerPriority = [];
 
   let rest = numMessages;
   let totalPowerPriority = configurePowerPriority();
@@ -168,7 +170,7 @@ const getClassifierMessage = async (numMsgsToExtract: number, priorityMessages: 
 }
 
 const downloadCSV = async (name: string) => {
-  const fileHandle = await storage.prepareForDownload(name);
+  const fileHandle = await storageFiles.prepareForDownload(name);
   postMessage({
     type: 'DOWNLOAD_FINISHED',
     payload: fileHandle,
@@ -199,13 +201,15 @@ const runReadAndSortLoop = async () => {
 const initiliazeDispatcher = async () => {
   isRuning = true;
   iniTimestamp = Date.now();
-  await storage.init(MY_FILES);
+  await storageFiles.init(MY_FILES);
   configureMsgPerPriority();
   launch();
 }
 
-const stopLaunch = () => {
+const stopLaunch = (endSimulation: boolean = false) => {
   if (readAndSortTimeout) clearTimeout(readAndSortTimeout);
+
+  if (endSimulation) storageFiles.closeAll();
 }
 
 const togglePlayPause = async (simulationIsRuning: boolean) => {
@@ -299,7 +303,7 @@ addEventListener('message', (event) => {
 
     case 'STOP':
       isRuning = false;
-      stopLaunch();
+      stopLaunch(true);
       console.log('DISPATCHER Worker: Sistema DETENIDO');
 
       break;

@@ -4,6 +4,7 @@ import { iotBrokerFilesName, categoriserFilesNames, dispatcherFilesNames, consum
 import JSZip from 'jszip'; // Libreria para generar los ZIPs
 import { BehaviorSubject } from 'rxjs';
 import { Communication } from '../constants/communication.constant';
+import { WorkerId, WorkerMap } from '../types/workers.types';
 
 @Injectable({
   providedIn: 'root'
@@ -18,10 +19,7 @@ export class SimulationService {
   private lastPriorityLength = 4;
 
   // Declaración de los Workers
-  private iotBrokerWorker!: Worker;
-  private categoriserWorker!: Worker;
-  private dispatcherWorker!: Worker;
-  private consumerWorker!: Worker;
+  private workers: WorkerMap = {} as WorkerMap;
 
   fileWorkerMap = new Map<string, Worker>(); // Mapeo de los nombres de los archivos que tendra cada worker
 
@@ -30,22 +28,40 @@ export class SimulationService {
     this.buildFileWorkerMap();
   }
 
+  private initWorkers() {
+    // Declaración explícita para que el bundler (Webpack/Esbuild) los reconozca
+    this.workers = {
+      iotBroker: new Worker(new URL('./workers/iot-broker.worker', import.meta.url)),
+      categoriser: new Worker(new URL('./workers/categoriser.worker', import.meta.url)),
+      dispatcher: new Worker(new URL('./workers/dispatcher.worker', import.meta.url)),
+      consumer: new Worker(new URL('./workers/consumer.worker', import.meta.url))
+    };
+
+    console.log("Workers inicializados correctamente");
+
+    // Establecer canales
+    this.createChannel(this.workers.iotBroker, this.workers.categoriser);
+    this.createChannel(this.workers.categoriser, this.workers.dispatcher);
+    this.createChannel(this.workers.dispatcher, this.workers.consumer);
+  }
+
+
   private buildFileWorkerMap() {
     // Mapeo de cada fichero con el worker correspondiente
-    const workerConfigs = [
-      { files: iotBrokerFilesName, worker: this.iotBrokerWorker },
-      { files: categoriserFilesNames, worker: this.categoriserWorker },
-      { files: dispatcherFilesNames, worker: this.dispatcherWorker },
-      { files: consumerFilesNames, worker: this.consumerWorker }
-    ];
+    const mapping: Record<WorkerId, any> = {
+      iotBroker: iotBrokerFilesName,
+      categoriser: categoriserFilesNames,
+      dispatcher: dispatcherFilesNames,
+      consumer: consumerFilesNames
+    };
 
     // Generamos el fileWorkerMap con cada fichero y su worker correspondiente
-    workerConfigs.forEach(config => {
-      Object.values(config.files).forEach((fileName) => {
-        this.fileWorkerMap.set(fileName as string, config.worker);
+    Object.entries(mapping).forEach(([id, files]) => {
+      const worker = this.workers[id as WorkerId];
+      Object.values(files).forEach((fileName) => {
+        this.fileWorkerMap.set(fileName as string, worker);
       });
     });
-
   }
 
   // Pasamos del formato recibido {name: 'changeDayNight', value: 1} al siguiente {changeDayNight: true}
@@ -54,6 +70,20 @@ export class SimulationService {
       acc[curr.name] = curr.value;
       return acc;
     }, {} as any);
+  }
+
+  stopSimulation = () => {
+    // Detenemos los workers
+    try {
+      this.toggleInitializedSimulation(false);
+      this.runingSubject.next(false);
+
+      this.broadcast('STOP')
+
+    } catch (error) {
+      this.toggleInitializedSimulation(false);
+      console.error('Se ha producido un error al incializar los workers: ' + error);
+    }
   }
 
   configureSimulation = (newConfig: any) => {
@@ -70,8 +100,7 @@ export class SimulationService {
           this.lastPriorityLength = configToSendIotBroker.weights.length;
         }
 
-        console.log({ configToSendIotBroker })
-        this.iotBrokerWorker.postMessage({ type: 'CONFIGURE', payload: configToSendIotBroker });
+        this.getWorker('iotBroker').postMessage({ type: 'CONFIGURE', payload: configToSendIotBroker });
       }
 
       if (newConfig?.categoriser || changePriorityQueues) {
@@ -81,7 +110,8 @@ export class SimulationService {
         if (changePriorityQueues) {
           configToSendCategoriser['minPriority'] = this.lastPriorityLength;
         }
-        this.categoriserWorker.postMessage({ type: 'CONFIGURE', payload: configToSendCategoriser });
+
+        this.getWorker('categoriser').postMessage({ type: 'CONFIGURE', payload: configToSendCategoriser });
       }
 
       if (newConfig?.dispatcher || changePriorityQueues) {
@@ -90,7 +120,8 @@ export class SimulationService {
         if (changePriorityQueues) {
           configToSendDispatcher['minPriority'] = this.lastPriorityLength;
         }
-        this.dispatcherWorker.postMessage({ type: 'CONFIGURE', payload: configToSendDispatcher });
+
+        this.getWorker('dispatcher').postMessage({ type: 'CONFIGURE', payload: configToSendDispatcher });
       }
 
       if (newConfig?.consumer || changePriorityQueues) {
@@ -99,7 +130,8 @@ export class SimulationService {
         if (changePriorityQueues) {
           configToSendConsumer['minPriority'] = this.lastPriorityLength;
         }
-        this.consumerWorker.postMessage({ type: 'CONFIGURE', payload: configToSendConsumer });
+
+        this.getWorker('consumer').postMessage({ type: 'CONFIGURE', payload: configToSendConsumer });
       }
 
     } catch (error) {
@@ -200,13 +232,7 @@ export class SimulationService {
       this.runingSubject.next(!this.runingSubject.value);
       const isPlaying = this.runingSubject.value;
 
-      this.iotBrokerWorker.postMessage({ type: 'PLAY_PAUSE', payload: isPlaying });
-
-      this.categoriserWorker.postMessage({ type: 'PLAY_PAUSE', payload: isPlaying });
-
-      this.dispatcherWorker.postMessage({ type: 'PLAY_PAUSE', payload: isPlaying });
-
-      this.consumerWorker.postMessage({ type: 'PLAY_PAUSE', payload: isPlaying });
+      this.broadcast('PLAY_PAUSE', isPlaying)
 
     } catch (error) {
       this.toggleInitializedSimulation(false);
@@ -220,10 +246,7 @@ export class SimulationService {
       this.toggleInitializedSimulation(true);
       this.runingSubject.next(true);
 
-      this.iotBrokerWorker.postMessage({ type: 'START' });
-      this.categoriserWorker.postMessage({ type: 'START' });
-      this.dispatcherWorker.postMessage({ type: 'START' });
-      this.consumerWorker.postMessage({ type: 'START' });
+      this.broadcast('START')
 
     } catch (error) {
       this.toggleInitializedSimulation(false);
@@ -231,43 +254,34 @@ export class SimulationService {
     }
   }
 
-
-  private initWorkers() {
-
-    if (!this.iotBrokerWorker)
-      this.iotBrokerWorker = new Worker(
-        new URL('./workers/iot-broker.worker', import.meta.url)
-      );
-
-    if (!this.categoriserWorker)
-      this.categoriserWorker = new Worker(
-        new URL('./workers/categoriser.worker', import.meta.url)
-      );
-
-    if (!this.dispatcherWorker)
-      this.dispatcherWorker = new Worker(
-        new URL('./workers/dispatcher.worker', import.meta.url)
-      );
-
-    if (!this.consumerWorker)
-      this.consumerWorker = new Worker(
-        new URL('./workers/consumer.worker', import.meta.url)
-      );
-
-
-
-    // Creamos un canal de comunicacion gracias a MessageChannel.
-    // El primero se entiende que es el emisor, y el segundo el receptor
-    this.createChannel(this.iotBrokerWorker, this.categoriserWorker);
-    this.createChannel(this.categoriserWorker, this.dispatcherWorker);
-    this.createChannel(this.dispatcherWorker, this.consumerWorker);
+  private getWorker(id: WorkerId): Worker {
+    return this.workers[id];
   }
 
+  // Función para crear un canal de comunicación entre los Workers
   private createChannel(firstWorker: Worker, secondWorker: Worker) {
     const channel = new MessageChannel();
 
     firstWorker.postMessage({ type: 'CONNECT_CHANNEL', payload: Communication.emisor }, [channel.port1]);
     secondWorker.postMessage({ type: 'CONNECT_CHANNEL', payload: Communication.receptor }, [channel.port2]);
     console.log('Service: Canal directo establecido entre Broker y Categoriser.');
+  }
+
+  // Función para enviar un mensaje a TODOS los workers
+  private broadcast(type: string, payload?: any): void {
+    if (!this.workers) return;
+
+    Object.values(this.workers).forEach((worker) => {
+      if (worker) {
+        worker.postMessage({ type, payload });
+      }
+    });
+  }
+
+  // Función para destruir TODOS los workers
+  destroyWorkers() {
+    Object.values(this.workers).forEach(worker => worker.terminate());
+    this.initializedSubject.next(false);
+    this.runingSubject.next(false);
   }
 }

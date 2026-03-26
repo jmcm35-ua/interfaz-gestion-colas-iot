@@ -11,7 +11,7 @@ import { Communication } from "app/core/constants/communication.constant";
 let iotBrokerMessenger: RequestManager;
 let dispatcherPort: MessagePort; // Conexion con el Categoriser
 
-const storage = new FileStorageManager();
+const storageFiles = new FileStorageManager();
 const MY_FILES: FileObject[] = [
   {
     name: categoriserFilesNames.fileNameClassified,
@@ -52,14 +52,14 @@ let classifyTimeout: any;
 let expirationTimeout: any;
 
 const writeLog = (fileName: string, message: string, printTimestamp: boolean = true) => {
-  storage.write(fileName, initialTimestamp, message, printTimestamp);
+  storageFiles.write(fileName, initialTimestamp, message, printTimestamp);
 };
 
 const initiliazeCategoriser = async () => {
   initialTimestamp = Date.now(); // Cuando se inicia el sistema
   // ToDo: hay que inicializar baseExpirationTime dependiendo del número de colas
   // Incializamos cada cola a una lista vacía y los expiration time
-  await storage.init(MY_FILES);
+  await storageFiles.init(MY_FILES);
   updateCategoriserStructure();
   isRuning = true;
   launch(); // Comienza el ciclo de lectura y categorizacion
@@ -214,7 +214,7 @@ const showQueuesStatus = () => {
 const expirationMsgQueueHandler = async () => {
   const { expirationMaxQueueMsg } = config;
   console.log("************ Checking message expirations ************");
-  const now = Date.now();
+  const now = Date.now() - initialTimestamp;
   let expiredCount = 0;
   let totalExpired = 0;
   let reg = "";
@@ -363,7 +363,7 @@ const configureDispatcherPort = () => {
 
 
 const downloadCSV = async (name: string) => {
-  const fileHandle = await storage.prepareForDownload(name);
+  const fileHandle = await storageFiles.prepareForDownload(name);
   postMessage({
     type: 'DOWNLOAD_FINISHED',
     payload: fileHandle,
@@ -378,9 +378,11 @@ const updateConfig = (newConfig: any) => {
   // console.log('Nuevo objeto config en el categoriser:', config);
 }
 
-const stopLaunch = () => {
+const stopLaunch = (endSimulation: boolean = false) => {
   if (classifyTimeout) clearTimeout(classifyTimeout);
   if (expirationTimeout) clearTimeout(expirationTimeout);
+
+  if (endSimulation) storageFiles.closeAll();
 }
 
 const togglePlayPause = async (simulationIsRuning: boolean) => {
@@ -427,7 +429,7 @@ addEventListener('message', (event) => {
 
     case 'STOP':
       isRuning = false;
-      stopLaunch();
+      stopLaunch(true);
       console.log('Categoriser Worker: Sistema DETENIDO');
 
       break;

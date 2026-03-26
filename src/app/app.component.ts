@@ -9,24 +9,38 @@ import { FilesComponent } from "./modules/files/files.component";
 import { DashboardComponent } from './modules/dashboard/dashboard.component';
 import { CommonModule } from '@angular/common';
 import { FuseMediaWatcherService } from '@fuse/services/media-watcher';
-import { Subject, takeUntil } from 'rxjs';
+import { Subject, Subscription, takeUntil } from 'rxjs';
 import { MatDrawerContainer, MatDrawer, MatDrawerContent } from "@angular/material/sidenav";
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { SimulationService } from './core/simulation/simulation.service';
-
+import { trigger, transition, style, animate, state } from '@angular/animations';
 
 @Component({
     selector: 'app-root',
     standalone: true,
     imports: [MatIconModule, MatIconButton, MatButtonModule, DashboardComponent, ConfigurationComponent, CommonModule, FilesComponent, MatDrawerContainer, MatDrawer, MatDrawerContent, MatTooltipModule, RouterOutlet],
     templateUrl: './app.component.html',
-    styleUrl: './app.component.scss'
+    styleUrl: './app.component.scss',
+    animations: [
+        trigger('fadeInOut', [
+            transition(':enter', [
+                style({ opacity: 0, transform: 'scale(0.8)' }),
+                animate('200ms ease-out', style({ opacity: 1, transform: 'scale(1)' }))
+            ]),
+            transition(':leave', [
+                animate('200ms ease-in', style({ opacity: 0, transform: 'scale(0.8)' }))
+            ])
+        ])
+    ]
 })
 export class AppComponent {
     @Input() tooltip: string | undefined;
+    private subToInitalizedSimulation: Subscription | undefined;
+    private subToIsRuningSimulation: Subscription | undefined;
+    private _unsubscribeAll: Subject<any> = new Subject<any>();
 
     textoAccionPlayPause: string = 'Iniciar simulación';
-    isSimulating = false;
+    isRuning = false;
     isInitialized = false;
 
     title = 'Simulador';
@@ -39,7 +53,6 @@ export class AppComponent {
     // Tipo de animación de deslizamiento
     drawerMode: 'over' | 'side' = 'side';
     drawerOpened: boolean = true;
-    private _unsubscribeAll: Subject<any> = new Subject<any>();
 
     toggleStateSimulation() {
         // if (!this.isInitialized) {
@@ -48,7 +61,6 @@ export class AppComponent {
         // }
         // this.isSimulating = !this.isSimulating;
         this.simulationService.handleStateSimulation(); // Aqui se gestiona si esta inicializada la simulacion o en ejecucion/pausa
-
     }
 
     constructor(private _fuseMediaWatcherService: FuseMediaWatcherService, private simulationService: SimulationService) {
@@ -56,6 +68,18 @@ export class AppComponent {
 
     // Esto controla el panel deslizante de Configuration con el componente que nos ofrece la plantilla de Fuse Angular
     ngOnInit(): void {
+
+        // Nos suscribimos a los cambios de la variable de la simulacion
+        this.subToInitalizedSimulation = this.simulationService.isInitialized$.subscribe(isInit => {
+
+            this.isInitialized = isInit;
+        });
+
+        this.subToIsRuningSimulation = this.simulationService.isRuning$.subscribe(isRuning => {
+
+            this.isRuning = isRuning;
+        });
+
         // Subscribe to media changes
         this._fuseMediaWatcherService.onMediaChange$
             .pipe(takeUntil(this._unsubscribeAll))
@@ -70,6 +94,11 @@ export class AppComponent {
                     this.drawerOpened = false;
                 }
             });
+    }
+
+    stopSimulation = () => {
+        if (this.isInitialized)
+            this.simulationService.stopSimulation();
     }
 
 

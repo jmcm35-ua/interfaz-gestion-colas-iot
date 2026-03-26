@@ -13,3 +13,36 @@
 .button:hover¨ {
     border-radius: 999px !important;
 }
+
+/* Contenedor relativo para que los iconos se encimen */
+.icon-wrapper {
+    position: relative;
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Estilo base para ambos iconos */
+.icon-wrapper mat-icon {
+    position: absolute;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    /* Transición suave */
+    display: flex !important;
+    /* Asegura que el mat-icon no rompa el flex */
+}
+
+/* Estado: Cuando NO está activo (oculto) */
+.icon-hidden {
+    opacity: 0;
+    transform: scale(0.5) rotate(-45deg);
+    pointer-events: none;
+}
+
+/* Estado: Cuando SÍ está activo (visible) */
+.icon-visible {
+    opacity: 1;
+    transform: scale(1) rotate(0deg);
+    pointer-events: auto;
+}

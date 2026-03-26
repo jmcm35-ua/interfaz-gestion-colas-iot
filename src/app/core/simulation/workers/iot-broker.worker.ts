@@ -27,7 +27,7 @@ let categoriserPort: MessagePort; // Conexion con el Categoriser
 //! VARIABLES PARA EL SISTEMA DE ARCHIVOS (OPFS)
 //************************************************
 
-const storage = new FileStorageManager();
+const storageFiles = new FileStorageManager();
 const MY_FILES: FileObject[] = [
   {
     name: iotBrokerFilesName.fileNameSummary,
@@ -93,7 +93,7 @@ const genPriority = () => {
 }
 
 const writeLog = (fileName: string, message: string, printTimestamp: boolean = true) => {
-  storage.write(fileName, iniTimestamp, message, printTimestamp);
+  storageFiles.write(fileName, iniTimestamp, message, printTimestamp);
 };
 
 
@@ -215,13 +215,13 @@ const initializeIotBroker = async () => {
   // Iniciamos el tiempo
   iniTimestamp = Date.now();
   isRuning = true;
-  await storage.init(MY_FILES);
+  await storageFiles.init(MY_FILES);
 
   genMsg();
 }
 
 const downloadCSV = async (name: string) => {
-  const fileHandle = await storage.prepareForDownload(name);
+  const fileHandle = await storageFiles.prepareForDownload(name);
   postMessage({
     type: 'DOWNLOAD_FINISHED',
     payload: fileHandle,
@@ -229,11 +229,17 @@ const downloadCSV = async (name: string) => {
   });
 }
 
+const stopLaunch = (endSimulation: boolean = false) => {
+  if (genMsgTimeout) clearTimeout(genMsgTimeout);
+
+  if (endSimulation) storageFiles.closeAll();
+}
+
 const togglePlayPause = async (simulationIsRuning: boolean) => {
   isRuning = simulationIsRuning; // El estado se gestiona desde el servicio de simulacion
   if (!isRuning) {
-    // closeWriters();
-    if (genMsgTimeout) clearTimeout(genMsgTimeout);
+    stopLaunch();
+
   }
   else {
     // await initializeWriters(false);
@@ -268,7 +274,7 @@ addEventListener('message', (event) => {
     // ToDo: Incluir la funcionalidad para STOP, PAUSE y CONFIGURE
     case 'STOP':
       isRuning = false;
-      if (genMsgTimeout) clearTimeout(genMsgTimeout);
+      stopLaunch(true);
       console.log('Broker Worker: Sistema DETENIDO');
       break;
 

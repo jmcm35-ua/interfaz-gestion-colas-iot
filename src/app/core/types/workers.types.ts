@@ -34,3 +34,9 @@ export interface ConsumerConfig {
     timeToReadDispatcher: number;
     numMessagesToRead: number;
 }
+
+// Identificador del worker en el simulador
+export type WorkerId = 'iotBroker' | 'categoriser' | 'dispatcher' | 'consumer';
+
+// Interfaz para que el objeto workers sepa qué contiene
+export type WorkerMap = Record<WorkerId, Worker>;

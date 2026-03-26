@@ -28,22 +28,39 @@
                     </h2>
 
                     <div class="flex items-center gap-3 bg-slate-100 dark:bg-slate-800 p-1.5 rounded-2xl shadow-sm">
+    
                         <button mat-mini-fab 
-                        color="primary" 
-                        class="shadow-none hover:text-primary hover:bg-primary-300 transition-colors duration-200"
-                        (click)="toggleStateSimulation()"
-                        [matTooltip]="textoAccionPlayPause"
-                        >
-                            <mat-icon [svgIcon]="'heroicons_solid:play'"></mat-icon>
-                        </button>
-            
+                            color="primary" 
+                            class="shadow-none transition-all duration-200"
+                            [class.text-primary]="isInitialized"
+                            [class.bg-primary-300]="isInitialized"
+                            (click)="toggleStateSimulation()"
+                            [matTooltip]="isRuning ? 'Pausar' : 'Reproducir'">
+                        
+                        <div class="icon-wrapper">
+                            <mat-icon [svgIcon]="'heroicons_solid:play'"
+                                    [class.icon-visible]="!isRuning"
+                                    [class.icon-hidden]="isRuning">
+                            </mat-icon>
+                            
+                            <mat-icon [svgIcon]="'heroicons_solid:pause'"
+                                    [class.icon-visible]="isRuning"
+                                    [class.icon-hidden]="!isRuning">
+                            </mat-icon>
+                        </div>
+                    </button>
+
                         <button mat-mini-fab 
-                        class="text-slate-500 hover:text-red-600 transition-colors"
-                        [matTooltip]="'Detener'">
+                            class="transition-colors duration-200"
+                            [class.text-red-600]="isInitialized"
+                            [class.text-slate-500]="!isInitialized"
+                            [matTooltip]="'Detener'"
+                            (click)="stopSimulation()"
+                            >
                             <mat-icon class="icon-size-6" [svgIcon]="'heroicons_solid:stop'"></mat-icon>
                         </button>
-        </div>
-    </div>
+                    </div>
+                </div>
 
     <div class="flex items-center mt-6 sm:mt-0 gap-3">
         <div class="relative">
