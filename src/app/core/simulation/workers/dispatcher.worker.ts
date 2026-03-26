@@ -10,6 +10,7 @@ import { Communication } from 'app/core/constants/communication.constant';
 
 
 let categoriserMessenger: RequestManager;
+let consumerPort: MessagePort;
 
 const storage = new FileStorageManager();
 const MY_FILES: FileObject[] = [
@@ -220,6 +221,52 @@ const togglePlayPause = async (simulationIsRuning: boolean) => {
   console.log(`CATEGORISER Worker: Sistema ${isRuning ? 'REANUDADO' : 'PAUSADO'}`);
 }
 
+const configureConsumerPort = () => {
+  consumerPort.onmessage = ({ data }) => {
+
+    const { type, messageId, payload } = data;
+
+    if (!isRuning) {
+      consumerPort.postMessage({
+        type: 'MESSAGES_PULLED',
+        code: 200,
+        payload: { extractedMessages: [] }
+      });
+      return;
+    }
+
+    if (type === 'GET_MESSAGES') {
+      sendMessagesToConsumer(messageId, payload);
+    } else {
+      console.warn('Incorrect message Type')
+    }
+  };
+}
+
+const sendMessagesToConsumer = (messageId: number, payload: any) => {
+  const { numMsgs } = payload;
+
+  // desencolo de la cola de mensajes tantos mensajes como dice num
+  // extraemos los mensajes del principio de la cola
+  const returnMsg = sortPriorityQueue.splice(0, numMsgs);
+
+  console.log("******************* get ***************************");
+  console.log('Dequeue', numMsgs, 'queue items. Remaining', sortPriorityQueue.length, 'messages in the queue.');
+  console.log("******************* END get ***************************\n\n");
+
+  //"Timestamp; Pedidos ; Extraidos; Quedan"
+  const register = numMsgs + ";" + returnMsg.length + ";" + sortPriorityQueue.length;
+  writeLog(dispatcherFilesNames.fileNameREST, register, true);
+
+  consumerPort.postMessage({
+    type: 'MESSAGES_PULLED',
+    messageId: messageId,
+    payload: {
+      extractedMessages: returnMsg
+    }
+  });
+}
+
 // Evento para escuchar los MENSAJES que entran al CATEGORISER
 addEventListener('message', (event) => {
   const { type, payload } = event.data;
@@ -234,7 +281,8 @@ addEventListener('message', (event) => {
       } else {
 
         // Inicializamos el puerto de comunicacion con el Consumer
-        // consumerPort = port;
+        consumerPort = port;
+        configureConsumerPort();
       }
 
       break;

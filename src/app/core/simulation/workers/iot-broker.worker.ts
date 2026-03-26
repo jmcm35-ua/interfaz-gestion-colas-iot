@@ -2,10 +2,10 @@
 
 import { templateMsg } from "app/core/constants/message.constant";
 import { Message } from "app/core/types/messages.types";
-import { timestamp } from "rxjs";
 import { FileStorageManager } from "../helpers/FileStorageManager.helper";
 import { iotBrokerFilesName } from "app/core/constants/files.constant"
 import { FileObject } from "app/core/types/variables.types";
+import { IoTBrokerConfig } from "app/core/types/workers.types";
 
 /****
  * 
@@ -58,21 +58,18 @@ let genMsgTimeout: any;
 
 let iniTimestamp = Date.now();
 
-let config = {
+let config: IoTBrokerConfig = {
   maxMsg: 1000,         // Máximo número de mensajes por remesa
   minMsg: 300,          // Mínimo número de mensajes por remesa
   changeDayNight: true, // Define queremos cambiar entre dia y noche
   factorNight: 0.2,     // Factor para aumentar los mensajes de día
-  shipmentChange: 500,  // Cada X remesas cambiamos de día a noche o viceversa
-  // maxPriority: 1,    // Máxima prioridad //! Creo que no hacen falta estas dos
-  // minPriority: 4,    // Míninma prioridad
-  // Distribucion de prioridades entre los mensajes, esto es el porcentaje de mensajes que tendrán cada prioridad
-  // debe sumar 1.0 y haber tantos como prioridades
   weights: [0.05, 0.2, 0.30, 0.45],
   maxQueueMsg: -1,      // Controla el número máximo de mensajes en la cola para depuración, -1 indica sin límite
   maxTimeToGenerateMsg: 1000,
   totalMessages: 1000000,
 }
+
+const shipmentChange = 500;  // Cada X remesas cambiamos de día a noche o viceversa
 
 let producedMessages = 0; // Contador de cuantos mensajes lleva hasta ahora
 let isDay = true;        // Define si es de dia
@@ -104,7 +101,7 @@ const writeLog = (fileName: string, message: string, printTimestamp: boolean = t
 // Los mensajes se encolan al final de la cola
 // Cada mensaje tiene la estructura { remesa: X, id: X-Y, priority: Z }
 const genMsg = () => {
-  const { shipmentChange, totalMessages, maxMsg, minMsg, factorNight, changeDayNight, maxQueueMsg, maxTimeToGenerateMsg } = config;
+  const { totalMessages, maxMsg, minMsg, factorNight, changeDayNight, maxQueueMsg, maxTimeToGenerateMsg } = config;
 
   countShipment++;
 

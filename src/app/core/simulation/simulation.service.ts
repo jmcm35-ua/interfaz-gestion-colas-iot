@@ -29,6 +29,7 @@ export class SimulationService {
     this.initWorkers();
     this.buildFileWorkerMap();
   }
+
   private buildFileWorkerMap() {
     // Mapeo de cada fichero con el worker correspondiente
     const workerConfigs = [
@@ -45,7 +46,6 @@ export class SimulationService {
       });
     });
 
-    console.log('CREAMOS LOS ARCHIVOS DE LOS WORKERS')
   }
 
   // Pasamos del formato recibido {name: 'changeDayNight', value: 1} al siguiente {changeDayNight: true}
@@ -76,13 +76,11 @@ export class SimulationService {
 
       if (newConfig?.categoriser || changePriorityQueues) {
         //Damos formato al objeto config del Categoriser
-        console.log(newConfig)
         const configToSendCategoriser = newConfig?.categoriser ? this.prepareObjectConfig(newConfig.categoriser) : {};
 
         if (changePriorityQueues) {
           configToSendCategoriser['minPriority'] = this.lastPriorityLength;
         }
-        console.log({ configToSendCategoriser })
         this.categoriserWorker.postMessage({ type: 'CONFIGURE', payload: configToSendCategoriser });
       }
 
@@ -92,10 +90,17 @@ export class SimulationService {
         if (changePriorityQueues) {
           configToSendDispatcher['minPriority'] = this.lastPriorityLength;
         }
-        console.log({ configToSendDispatcher })
         this.dispatcherWorker.postMessage({ type: 'CONFIGURE', payload: configToSendDispatcher });
       }
 
+      if (newConfig?.consumer || changePriorityQueues) {
+        const configToSendConsumer = newConfig?.consumer ? this.prepareObjectConfig(newConfig.consumer) : {};
+
+        if (changePriorityQueues) {
+          configToSendConsumer['minPriority'] = this.lastPriorityLength;
+        }
+        this.consumerWorker.postMessage({ type: 'CONFIGURE', payload: configToSendConsumer });
+      }
 
     } catch (error) {
       console.error('Se ha producido un error al configurar los workers: ' + error);
@@ -201,6 +206,7 @@ export class SimulationService {
 
       this.dispatcherWorker.postMessage({ type: 'PLAY_PAUSE', payload: isPlaying });
 
+      this.consumerWorker.postMessage({ type: 'PLAY_PAUSE', payload: isPlaying });
 
     } catch (error) {
       this.toggleInitializedSimulation(false);
@@ -217,6 +223,7 @@ export class SimulationService {
       this.iotBrokerWorker.postMessage({ type: 'START' });
       this.categoriserWorker.postMessage({ type: 'START' });
       this.dispatcherWorker.postMessage({ type: 'START' });
+      this.consumerWorker.postMessage({ type: 'START' });
 
     } catch (error) {
       this.toggleInitializedSimulation(false);
@@ -242,7 +249,10 @@ export class SimulationService {
         new URL('./workers/dispatcher.worker', import.meta.url)
       );
 
-
+    if (!this.consumerWorker)
+      this.consumerWorker = new Worker(
+        new URL('./workers/consumer.worker', import.meta.url)
+      );
 
 
 
@@ -250,6 +260,7 @@ export class SimulationService {
     // El primero se entiende que es el emisor, y el segundo el receptor
     this.createChannel(this.iotBrokerWorker, this.categoriserWorker);
     this.createChannel(this.categoriserWorker, this.dispatcherWorker);
+    this.createChannel(this.dispatcherWorker, this.consumerWorker);
   }
 
   private createChannel(firstWorker: Worker, secondWorker: Worker) {

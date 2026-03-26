@@ -31,13 +31,15 @@ const MY_FILES: FileObject[] = [
   }
 ];
 
+const maxPriority = 1; // Maxima prioridad
+
+let priorityMsgQueues: Message[][] = [];
+let priorityExpirationTimeQueue: number[] = [];
+const baseExpirationTime = [5000, 10000, 20000, 60000];
+let expirationMsgQueue: Message[] = [];
+
 let config: CategoriserConfig = {
-  maxPriority: 1, // Maxima prioridad
   minPriority: 4, // Minima prioridad
-  priorityMsgQueues: [],
-  priorityExpirationTimeQueue: [],
-  baseExpirationTime: [5000, 10000, 20000, 60000], // Tiempo base de expiración en ms
-  expirationMsgQueue: [], // Cola de expiración de mensajes
   expirationVerifiction: 1000, // Tiempo de comprobación de expiración de mensajes
   expirationMaxQueueMsg: -1, // Tamaño máximo de la cola de mensajes de expiración, -1 indica sin límite
   numMessages: 1000, // Número de mensajes a solicitar del Broker
@@ -95,15 +97,15 @@ const updateCategoriserStructure = (): void => {
  * Ajusta el tamaño de las colas de mensajes al número de prioridades definido.
  */
 const syncMessageQueues = (targetSize: number): void => {
-  const currentSize = config.priorityMsgQueues.length;
+  const currentSize = priorityMsgQueues.length;
 
   if (targetSize > currentSize) {
     // Añadimos nuevas colas vacías si el objetivo es mayor
     const newQueues = Array.from({ length: targetSize - currentSize }, () => []);
-    config.priorityMsgQueues.push(...newQueues);
+    priorityMsgQueues.push(...newQueues);
   } else if (targetSize < currentSize) {
     // Recortamos las colas si el objetivo es menor
-    config.priorityMsgQueues.length = targetSize;
+    priorityMsgQueues.length = targetSize;
   }
 };
 
@@ -113,13 +115,13 @@ const syncMessageQueues = (targetSize: number): void => {
 const syncExpirationTimes = (targetSize: number): void => {
   // let { priorityExpirationTimeQueue, baseExpirationTime } = config;
   // Aseguramos que el array tenga el tamaño exacto
-  config.priorityExpirationTimeQueue = config.baseExpirationTime.slice(0, targetSize);
+  priorityExpirationTimeQueue = baseExpirationTime.slice(0, targetSize);
 
-  while (config.priorityExpirationTimeQueue.length < targetSize) {
-    const lastExpirationTime = config.priorityExpirationTimeQueue[config.priorityExpirationTimeQueue.length - 1];
+  while (priorityExpirationTimeQueue.length < targetSize) {
+    const lastExpirationTime = priorityExpirationTimeQueue[priorityExpirationTimeQueue.length - 1];
     //! En caso de que base expirationTime no tenga suficientes huecos, hacemos lastExpirationTime * 3.
     //* Esto lo hacemos porque si nos fijamos en baseExpirationTime, los valores se incrementan en *2 y al final en *3
-    config.priorityExpirationTimeQueue.push(lastExpirationTime * 3); // Valor por defecto
+    priorityExpirationTimeQueue.push(lastExpirationTime * 3); // Valor por defecto
   }
 };
 
@@ -134,7 +136,7 @@ const getIotMessages = async (): Promise<any> => {
 
 // función que lee del broker IoT y clasifica los mensjaes recibidos en las colas de prioridad
 const readFromIotBrokerAndClassify = async () => {
-  const { maxPriority, minPriority, priorityMsgQueues, numMessages } = config;
+  const { minPriority, numMessages } = config;
   // console.clear();
   // console.log("\n************ Reading from IoT Broker and classifying messages ************");
   const response: any = await getIotMessages();
@@ -186,7 +188,6 @@ const readFromIotBrokerAndClassify = async () => {
 }
 
 const showQueuesStatus = () => {
-  const { priorityMsgQueues, priorityExpirationTimeQueue, expirationMsgQueue } = config;
   console.log("-----------------------------------------------------");
   console.log("Status of priority queues after reading from the IoT broker:");
   let msg = "Expiration: "
@@ -211,7 +212,7 @@ const showQueuesStatus = () => {
 // función que gestiona la expiración de mensajes en la cola de expiración
 // Recorremos todas las colas
 const expirationMsgQueueHandler = async () => {
-  const { priorityMsgQueues, priorityExpirationTimeQueue, expirationMsgQueue, expirationMaxQueueMsg } = config;
+  const { expirationMaxQueueMsg } = config;
   console.log("************ Checking message expirations ************");
   const now = Date.now();
   let expiredCount = 0;
@@ -247,7 +248,7 @@ const expirationMsgQueueHandler = async () => {
 
 const sendMessagesToDispatcher = (messageId: number, payload: any) => {
   try {
-    const { minPriority, maxPriority } = config;
+    const { minPriority } = config;
     const { numMsgs, priority } = payload;
 
     // Si la prioridad indicada no es válida, devolvemos error
@@ -258,18 +259,18 @@ const sendMessagesToDispatcher = (messageId: number, payload: any) => {
     console.log({ numMsgs, priority, maxPriority, payload })
     // desencolo de la cola de prioridad de mensajes tantos mensajes como dice num
     // extraemos los mensajes del principio de la cola, los más antiguos
-    let returnMsg = [];
+    let returnMsg: any = [];
     let msgRes = "";
-    if (config.priorityMsgQueues || config.expirationMsgQueue) {
+    if (priorityMsgQueues || expirationMsgQueue) {
       if (priority > 0) {
         console.log(config)
-        returnMsg = config.priorityMsgQueues[priority - 1].splice(0, numMsgs);
-        console.log('Dequeue', numMsgs, 'items from Q', priority, '. Remaining ', config.priorityMsgQueues[priority - 1].length, ' messages in the queue.');
+        returnMsg = priorityMsgQueues[priority - 1].splice(0, numMsgs);
+        console.log('Dequeue', numMsgs, 'items from Q', priority, '. Remaining ', priorityMsgQueues[priority - 1].length, ' messages in the queue.');
         msgRes = "Extract from Q" + priority;
       } else {
         // prioridad 0 indica la cola de expiración
-        returnMsg = config.expirationMsgQueue.splice(0, numMsgs);
-        console.log('Dequeue', numMsgs, 'items from EXPIRATION queue. Remainingn ', config.expirationMsgQueue.length, ' queue items.');
+        returnMsg = expirationMsgQueue.splice(0, numMsgs);
+        console.log('Dequeue', numMsgs, 'items from EXPIRATION queue. Remainingn ', expirationMsgQueue.length, ' queue items.');
         msgRes = "Extract from EXPIRATION";
       }
 
@@ -278,10 +279,10 @@ const sendMessagesToDispatcher = (messageId: number, payload: any) => {
     //""Timestamp; Pedidos por  Dispatcher; Leidos por Dispatcher; Cola Leida; Quedan Cola P1; Quedan Cola P2; Quedan Cola P3; Quedan Cola P4, Quedan Cola Expirados""
     let msg = "";
     for (let i = maxPriority; i <= minPriority; i++) {
-      msg += "Remaining Q" + config.priorityMsgQueues[i - 1].length + ";";
+      msg += "Remaining Q " + priorityMsgQueues[i - 1].length + ";";
     }
 
-    writeLog(categoriserFilesNames.fileNameREST, numMsgs + ";" + returnMsg.length + ";" + priority + ";" + msg + config.expirationMsgQueue.length, true)
+    writeLog(categoriserFilesNames.fileNameREST, numMsgs + ";" + returnMsg.length + ";" + priority + ";" + msg + expirationMsgQueue.length, true)
 
     dispatcherPort.postMessage({
       type: 'MESSAGES_PULLED',
@@ -296,7 +297,6 @@ const sendMessagesToDispatcher = (messageId: number, payload: any) => {
       }
     });
   } catch (error) {
-    console.error("ERRRORRRRR" + error);
     // dispatcherPort.postMessage({
     //   type: 'MESSAGES_PULLED',
     //   code: 400,
@@ -335,7 +335,7 @@ const runExpirationLoop = async () => {
   expirationTimeout = setTimeout(runExpirationLoop, config.expirationVerifiction);
 }
 
-const configureCategoriserPort = () => {
+const configureDispatcherPort = () => {
   dispatcherPort.onmessage = ({ data }) => {
 
     const { type, messageId, payload } = data;
@@ -410,7 +410,7 @@ addEventListener('message', (event) => {
 
         // Inicializamos el puerto de comunicacion con el Dispatcher
         dispatcherPort = port;
-        configureCategoriserPort();
+        configureDispatcherPort();
       }
 
       break;

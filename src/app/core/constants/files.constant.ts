@@ -18,5 +18,6 @@ export const dispatcherFilesNames = {
 }
 
 export const consumerFilesNames = {
-
+    fileNameConsumer: 'consumer.csv',
+    fileNameConsumerBatch: 'consumer_batch.csv'
 }

@@ -56,7 +56,7 @@ export class ConfigurationComponent implements OnInit, OnDestroy {
   variablesCategoriser: Variables[] = [
     { name: 'expirationVerifiction', value: 1000, text: 'Verificación de expiración (ms)', minimum: 100, maximum: 10000000, input: true },
     { name: 'expirationMaxQueueMsg', value: -1, text: 'Máximo número de mensajes en cola', minimum: -1, maximum: 1000000, input: true },
-    { name: 'num_messages', value: 1000, text: 'Mensajes a solicitar del IoT Broker', minimum: 1, maximum: 1000000, input: true },
+    { name: 'numMessages', value: 1000, text: 'Mensajes a solicitar del IoT Broker', minimum: 1, maximum: 1000000, input: true },
     { name: 'timeToReadIotBroker', value: 500, text: 'Tiempo a esperar entre lecturas (ms)', minimum: 100, maximum: 10000000, input: true }
   ]
 
@@ -67,7 +67,7 @@ export class ConfigurationComponent implements OnInit, OnDestroy {
   ]
 
   variablesConsumer: Variables[] = [
-    { name: 'num', value: 1000, text: 'Mensajes que se sirven al sistema', minimum: 1, maximum: 1000000, input: true },
+    { name: 'numMessagesToRead', value: 1000, text: 'Mensajes que se sirven al sistema', minimum: 1, maximum: 1000000, input: true },
     { name: 'timeToReadDispatcher', value: 1000, text: 'Tiempo a esperar entre lecturas (ms)', minimum: 100, maximum: 10000000, input: true },
   ]
 
