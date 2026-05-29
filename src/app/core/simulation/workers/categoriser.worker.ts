@@ -51,6 +51,17 @@ let isRuning = false;
 let classifyTimeout: any;
 let expirationTimeout: any;
 
+let isDebug = false;
+const originalLog = console.log;
+
+console.log = (...args: any[]) => {
+  // SOLO si el flag interno es true, se ejecuta el log original
+  if (isDebug) {
+    originalLog.apply(console, args);
+  }
+};
+
+
 const writeLog = (fileName: string, message: string, printTimestamp: boolean = true) => {
   storageFiles.write(fileName, initialTimestamp, message, printTimestamp);
 };
@@ -256,14 +267,12 @@ const sendMessagesToDispatcher = (messageId: number, payload: any) => {
       // return res.status(400).json({ errors: [{ msg: 'priority It must be a number between 0 and ' + minPriority + '.' }] });
     }
 
-    console.log({ numMsgs, priority, maxPriority, payload })
     // desencolo de la cola de prioridad de mensajes tantos mensajes como dice num
     // extraemos los mensajes del principio de la cola, los más antiguos
     let returnMsg: any = [];
     let msgRes = "";
     if (priorityMsgQueues || expirationMsgQueue) {
       if (priority > 0) {
-        console.log(config)
         returnMsg = priorityMsgQueues[priority - 1].splice(0, numMsgs);
         console.log('Dequeue', numMsgs, 'items from Q', priority, '. Remaining ', priorityMsgQueues[priority - 1].length, ' messages in the queue.');
         msgRes = "Extract from Q" + priority;
@@ -350,9 +359,6 @@ const configureDispatcherPort = () => {
       return;
     }
 
-
-    if (!isRuning) return;
-
     if (type === 'GET_MESSAGES') {
       sendMessagesToDispatcher(messageId, payload);
     } else {
@@ -398,6 +404,20 @@ const togglePlayPause = async (simulationIsRuning: boolean) => {
   console.log(`CATEGORISER Worker: Sistema ${isRuning ? 'REANUDADO' : 'PAUSADO'}`);
 }
 
+const sendMetrics = () => {
+  postMessage({
+    type: 'METRICS_RESPONSE',
+    payload: {
+      queuesLength: priorityMsgQueues.map(q => q.length),
+      expirationQueue: expirationMsgQueue.length,
+    }
+  })
+}
+
+const debug = (message: string) => {
+  console.log(message)
+}
+
 // Evento para escuchar los MENSAJES que entran al CATEGORISER
 addEventListener('message', (event) => {
   const { type, payload } = event.data;
@@ -440,8 +460,11 @@ addEventListener('message', (event) => {
       break;
 
     case 'DOWNLOAD_ONE_CSV':
-
       downloadCSV(payload);
+      break;
+
+    case 'GET_METRICS':
+      sendMetrics();
       break;
   }
 });

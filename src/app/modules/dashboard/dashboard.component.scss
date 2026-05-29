@@ -1,0 +1,10 @@
+.kpis {
+    display: grid;
+    grid-template-columns: auto auto auto;
+    /* Tres columnas adaptables */
+    gap: 16px;
+}
+
+.kpis>div {
+    max-width: 200px;
+}

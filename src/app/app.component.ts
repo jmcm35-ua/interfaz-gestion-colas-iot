@@ -111,7 +111,6 @@ export class AppComponent {
     openFiles(event: Event): void { // Varía entre mostrar los archivos y no mostrarlos
         event?.stopPropagation();
         this.showFiles = !this.showFiles;
-        console.log(this.showFiles)
         // event.stopPropagation();
     }
 

@@ -40,3 +40,24 @@ export type WorkerId = 'iotBroker' | 'categoriser' | 'dispatcher' | 'consumer';
 
 // Interfaz para que el objeto workers sepa qué contiene
 export type WorkerMap = Record<WorkerId, Worker>;
+
+// Interfaz para las métricas
+export interface WorkerMetricsSnapshot {
+    timestamp: number;          // Tiempo transcurrido de simulación (ms) desde iniTimestamp
+    iotBroker: {
+        queueSize: number;        // Mensajes acumulados sin clasificar en el Broker
+        totalProduced: number;    // Acumulado histórico de mensajes creados
+        generatedMessages: number[];
+    };
+    categoriser: {
+        queuesLength: any[];   // Array con la longitud actual de cada cola [Q1, Q2, Q3, Q4]
+        expirationQueue: number;  // Mensajes en la cola de expirados
+    };
+    dispatcher: {
+        sortPriorityQueue: number;  // Tamaño actual de la cola ordenada y priorizada
+    };
+    consumer: {
+        readByPriority: number[]; // Histórico de mensajes procesados por prioridad [P1, P2, P3, P4]
+        timePerPriority: number[];
+    };
+}

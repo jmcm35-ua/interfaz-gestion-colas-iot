@@ -24,21 +24,38 @@ const MY_FILES: FileObject[] = [
   }
 ];
 
+// Momento en el que se inició la sesión
 let iniTimestamp = Date.now();
 
+// Variable que gestiona si está en funcionamiento el worker
+let isRuning: boolean = false;
+
+// Controla
+let readAndSortTimeout: any;
+
+// Variables internas del worker
 let powerPriority: number[] = [];
 let msgPerPriority: number[] = [];
 let sortPriorityQueue: Message[] = [];
 
-let isRuning: boolean = false;
-let readAndSortTimeout: any;
-
+// Variables configurables del Worker
 let config: DispatcherConfig = {
   maxSortQueue: -1,
   numMessages: 1000,
   timeToReadCategoriser: 1000,
   minPriority: 4
 }
+
+let isDebug = false;
+const originalLog = console.log;
+
+console.log = (...args: any[]) => {
+  // SOLO si el flag interno es true, se ejecuta el log original
+  if (isDebug) {
+    originalLog.apply(console, args);
+  }
+};
+
 
 const writeLog = (fileName: string, message: string, printTimestamp: boolean = true) => {
   storageFiles.write(fileName, iniTimestamp, message, printTimestamp);
@@ -271,6 +288,15 @@ const sendMessagesToConsumer = (messageId: number, payload: any) => {
   });
 }
 
+const sendMetrics = () => {
+  postMessage({
+    type: 'METRICS_RESPONSE',
+    payload: {
+      sortPriorityQueue: sortPriorityQueue.length
+    }
+  })
+};
+
 // Evento para escuchar los MENSAJES que entran al CATEGORISER
 addEventListener('message', (event) => {
   const { type, payload } = event.data;
@@ -283,12 +309,10 @@ addEventListener('message', (event) => {
         // Inicializamos el messenger con el puerto del Categoriser y le decimos que espere respuestas tipo 'MESSAGES_PULLED'
         categoriserMessenger = new RequestManager(port, 'MESSAGES_PULLED');
       } else {
-
         // Inicializamos el puerto de comunicacion con el Consumer
         consumerPort = port;
         configureConsumerPort();
       }
-
       break;
 
     case 'START':
@@ -304,8 +328,7 @@ addEventListener('message', (event) => {
     case 'STOP':
       isRuning = false;
       stopLaunch(true);
-      console.log('DISPATCHER Worker: Sistema DETENIDO');
-
+      console.log('DISPATCHER Worker: Sistema detenido');
       break;
 
     case 'CONFIGURE':
@@ -314,8 +337,11 @@ addEventListener('message', (event) => {
       break;
 
     case 'DOWNLOAD_ONE_CSV':
-
       downloadCSV(payload);
+      break;
+
+    case 'GET_METRICS':
+      sendMetrics();
       break;
   }
 });

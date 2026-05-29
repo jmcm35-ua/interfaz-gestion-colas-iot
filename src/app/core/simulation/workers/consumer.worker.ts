@@ -27,13 +27,28 @@ let isRuning = false;
 let consumeMessagesTimeout: any;
 
 let iniTimestamp = Date.now();
-const readMsgPriority: any = []; // Numero de elementos leidos por prioridad
+const readMsgPriority: any[] = []; // Numero de elementos leidos por prioridad
+
+//! Variables para procesar metricas
+let totalWaitTime: number[] = []; // Acumulado de tiempo de espera
+let timePerPriority: number[] = []; // Promedio de tiempo de cada cola
 
 let config: ConsumerConfig = {
   minPriority: 4,  // minima prioridad
   timeToReadDispatcher: 1000, // Velocidad de lectura
   numMessagesToRead: 1000 // mensajes que del dispatcher se sirven al sistema
 }
+
+let isDebug = false;
+const originalLog = console.log;
+
+console.log = (...args: any[]) => {
+  // SOLO si el flag interno es true, se ejecuta el log original
+  if (isDebug) {
+    originalLog.apply(console, args);
+  }
+};
+
 
 const writeLog = (fileName: string, message: string, printTimestamp: boolean = true) => {
   storageFiles.write(fileName, iniTimestamp, message, printTimestamp);
@@ -56,6 +71,9 @@ const updatePriorityMessages = () => {
   if (targetSize > currentSize) {
     const newQueues = Array.from({ length: targetSize - currentSize }, () => 0);
     readMsgPriority.push(...newQueues);
+    timePerPriority.push(...newQueues);
+    totalWaitTime.push(...newQueues);
+
   } //! Si se hace más pequeño no deberiamos de eliminar as existentes...
 
   preprareHeaders();
@@ -83,10 +101,19 @@ const consumeMessages = async () => {
 
   let register = '';
   // Para cada mensaje leido vamos a escribir en el archivo sus datos
-  const currentTime = Date.now();
+  const currentTime = Date.now() - iniTimestamp;
   extractedMessages.forEach((msg: Message) => {
     const { priority, id, shipment, timestamp } = msg;
-    readMsgPriority[priority - 1]++; // Incrementamos el contador de la prioridad que le corresponda
+    const pIndex = priority - 1;
+
+
+    const waitTime = currentTime - timestamp;
+    totalWaitTime[pIndex] += waitTime;
+
+    readMsgPriority[pIndex]++;
+
+    // Sacamos el promedio con el total de tiempo / total de mensajes de la cola
+    timePerPriority[pIndex] = Math.trunc(totalWaitTime[pIndex] / readMsgPriority[pIndex]);
     register += `${currentTime - iniTimestamp};${shipment};${id};${priority};${timestamp}\n`;
   });
 
@@ -164,6 +191,16 @@ const updateConfig = (newConfig: any) => {
   console.log('Nuevo objeto config:', config);
 }
 
+const sendMetrics = () => {
+  postMessage({
+    type: 'METRICS_RESPONSE',
+    payload: {
+      readByPriority: readMsgPriority,
+      timePerPriority: timePerPriority
+    }
+  })
+}
+
 // Controlador de eventos. Escuchamos desde simulation.service
 addEventListener('message', (event) => {
   const { type, payload } = event.data;
@@ -201,6 +238,10 @@ addEventListener('message', (event) => {
     case 'DOWNLOAD_ONE_CSV':
 
       downloadCSV(payload);
+      break;
+
+    case 'GET_METRICS':
+      sendMetrics();
       break;
   }
 });

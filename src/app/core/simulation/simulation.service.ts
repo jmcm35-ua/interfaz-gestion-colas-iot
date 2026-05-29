@@ -2,31 +2,47 @@ import { HttpClient } from '@angular/common/http';
 import { inject, Injectable } from '@angular/core';
 import { iotBrokerFilesName, categoriserFilesNames, dispatcherFilesNames, consumerFilesNames } from 'app/core/constants/files.constant'
 import JSZip from 'jszip'; // Libreria para generar los ZIPs
-import { BehaviorSubject } from 'rxjs';
+import { BehaviorSubject, interval, Observable, of, Subscription, switchMap, filter } from 'rxjs';
 import { Communication } from '../constants/communication.constant';
-import { WorkerId, WorkerMap } from '../types/workers.types';
+import { WorkerId, WorkerMap, WorkerMetricsSnapshot } from '../types/workers.types';
 
 @Injectable({
   providedIn: 'root'
 })
 export class SimulationService {
+  // Observable para saber si la simulación se ha inicializado
   private initializedSubject = new BehaviorSubject<boolean>(false);
-  private runingSubject = new BehaviorSubject<boolean>(false);
-
   public isInitialized$ = this.initializedSubject.asObservable();
+
+  // Observable para saber si la simulación se está ejecutando
+  private runingSubject = new BehaviorSubject<boolean>(false);
   public isRuning$ = this.runingSubject.asObservable();
 
+  // Última prioridad registrada
   private lastPriorityLength = 4;
+
+  // Observable pora las metricas de los workers
+  private metricsSubject = new BehaviorSubject<WorkerMetricsSnapshot | null>(null);
+  public metrics$ = this.metricsSubject.asObservable();
+
+  private collectedMetrics: Record<string, any> = {};
+  private pollSubscription!: Subscription;
+
 
   // Declaración de los Workers
   private workers: WorkerMap = {} as WorkerMap;
 
-  fileWorkerMap = new Map<string, Worker>(); // Mapeo de los nombres de los archivos que tendra cada worker
+  // Mapeo de los nombres de los archivos que tendra cada worker
+  fileWorkerMap = new Map<string, Worker>();
 
   constructor() {
     this.initWorkers();
     this.buildFileWorkerMap();
+    this.setupGlobalMetricsCollector();
   }
+
+  //!POSIBLE FALLO DETECTADO
+  // tODO: SI SE PONE EN PAUSA, HABRIA QUE ACTUALIZAR EL TIEMPO INICIAL PARA QUE NO SE ROMPA LA REPODUCCION O ALGO ENTIENDO
 
   private initWorkers() {
     // Declaración explícita para que el bundler (Webpack/Esbuild) los reconozca
@@ -43,6 +59,57 @@ export class SimulationService {
     this.createChannel(this.workers.iotBroker, this.workers.categoriser);
     this.createChannel(this.workers.categoriser, this.workers.dispatcher);
     this.createChannel(this.workers.dispatcher, this.workers.consumer);
+  }
+
+  // Función para configurar las métricas
+  // Agregamos unos listener a los workers para capturar los mensajes de metricas
+  // Creamos 
+  private setupGlobalMetricsCollector() {
+    Object.entries(this.workers).forEach(([workerID, worker]) => {
+      worker.addEventListener('message', (event: MessageEvent) => {
+        const { type, payload } = event?.data;
+
+        if (type === 'METRICS_RESPONSE') {
+          this.collectedMetrics[workerID] = payload;
+        }
+      })
+    });
+
+    this.pollSubscription = this.isRuning$.pipe(
+      switchMap(isRuning =>
+        isRuning ? interval(100) : of(null)
+      ),
+      filter(tick => tick !== null)
+    ).subscribe(() => {
+      // Si esta corriendo el reloj (intervalo cada segundo)
+      this.broadcast('GET_METRICS');
+
+      // SI existe nuestro recolector de metricas, configuramos el observable para que el componente dashboard reciba la actualización
+      if (Object.keys(this.collectedMetrics).length > 0) {
+        const timestamp = this.collectedMetrics['iotBroker']?.timestamp || 0; // ¿ESTO HACE FALTA?
+        const snapshot: WorkerMetricsSnapshot = {
+          timestamp: timestamp,
+          iotBroker: {
+            queueSize: this.collectedMetrics['iotBroker']?.queueSize || 0,
+            totalProduced: this.collectedMetrics['iotBroker']?.totalProduced || 0,
+            generatedMessages: this.collectedMetrics['iotBroker']?.generatedMessages || 0
+          },
+          categoriser: {
+            queuesLength: this.collectedMetrics['categoriser']?.queuesLength || 0,
+            expirationQueue: this.collectedMetrics['categoriser']?.expirationQueue || 0
+          },
+          dispatcher: {
+            sortPriorityQueue: this.collectedMetrics['dispatcher']?.sortPriorityQueue || 0,
+          },
+          consumer: {
+            readByPriority: this.collectedMetrics['consumer']?.readByPriority || 0,
+            timePerPriority: this.collectedMetrics['consumer']?.timePerPriority || 0
+          }
+        }
+
+        this.metricsSubject.next(snapshot)
+      }
+    })
   }
 
 
@@ -82,7 +149,7 @@ export class SimulationService {
 
     } catch (error) {
       this.toggleInitializedSimulation(false);
-      console.error('Se ha producido un error al incializar los workers: ' + error);
+      console.error('Se ha producido un error al detener los workers: ' + error);
     }
   }
 
@@ -90,7 +157,6 @@ export class SimulationService {
     try {
       let changePriorityQueues = false;
 
-      console.log({ newConfig })
       if (newConfig?.iotBroker) {
         //Damos formato al objeto config de IoT-Broker
         const configToSendIotBroker = this.prepareObjectConfig(newConfig.iotBroker);
@@ -140,45 +206,53 @@ export class SimulationService {
   }
 
   async downloadCSV(singleFileName?: string) {
+    // Si no recibimos el nombre de un fichero, se da por hecho que quiere descargarlos todos
     const isZipMode = !singleFileName;
     const suggestedName = isZipMode ? 'simulation_logs.zip' : singleFileName;
 
     try {
+      // Muestra la pantalla emergente del explorador de archivos para guardar el fichero
       const fileHandle = await (window as any).showSaveFilePicker({
         suggestedName: suggestedName,
       });
-
+      // Creamos un stream de escritura para volcar los datos directamente al disco
       const writable = await fileHandle.createWritable();
 
+      // Si es un único archivo
       if (!isZipMode && singleFileName) {
+        // Recogemos el worker al que pertenece el archivo
         const worker = this.fileWorkerMap.get(singleFileName);
         if (!worker) throw new Error(`No worker found for ${singleFileName}`);
 
-        // processWorkerFileResponse ya te devuelve el File (que es un Blob)
+        // Esperamos a que el Worker procese y devuelva el Blob/File
         const result = await this.processWorkerFileResponse(worker, singleFileName);
-
+        // Escribimos el contenido del Blob en el destino
         await writable.write(result.content);
 
       } else {
-        // MODO ALL (ZIP)
+        // Si quiere descargar todos los archivos...
+        // Lanzamos todas las peticiones a los workers a la vez
         const promises: Promise<{ filename: string, content: Blob }>[] = [];
         this.fileWorkerMap.forEach((worker, filename) => {
           promises.push(this.processWorkerFileResponse(worker, filename));
         });
 
+        // Esperamos la respuesta de todos los workers
         const allFiles = await Promise.all(promises);
         const zip = new JSZip();
-
+        // Añadimos cada resultado al objeto ZIP
         allFiles.forEach(file => {
           zip.file(file.filename, file.content);
         });
 
+        // Generamos el binario del ZIP
         const zipBlob = await zip.generateAsync({ type: 'blob' });
 
         // Escribimos el ZIP generado en el archivo del usuario
         await writable.write(zipBlob);
       }
 
+      // Cerramos el archivo de escritura para asegurar que estos se escriben en el disco
       await writable.close();
       console.log('Archivo movido con éxito al disco local');
 
@@ -196,26 +270,38 @@ export class SimulationService {
    */
   private processWorkerFileResponse(worker: Worker, name: string): Promise<{ filename: string, content: Blob }> {
     return new Promise((resolve) => {
+      // Definimos el listener de forma interna para poder referenciarlo al eliminarlo
       const listener = async (event: MessageEvent) => {
         const { type, payload, filename } = event.data;
 
         if (type === 'DOWNLOAD_FINISHED' && filename === name) {
+          // Limpieza de memoria: eliminamos el listener una vez cumplida la promesa
           worker.removeEventListener('message', listener);
 
-          // PAYLOAD ahora es un FileSystemFileHandle
+          /*  
+            Payload es un FileSystemFileHandle, una referencia al OPFS.
+            Al usar .getFile(), obtenemos un objeto File que es un puntero a los datos en disco.
+            Esto evita el bloqueo y el desbordamiento de la RAM.
+          */
           const fileHandle = payload as FileSystemFileHandle;
-          console.log({ fileHandle })
-          // Extraemos el archivo (esto es un Blob que apunta al disco OPFS)
-          // Es muy eficiente y no carga los 2GB en RAM de golpe
           const file = await fileHandle.getFile();
-          console.log('ESTAmos descargando', { file })
           resolve({ filename, content: file });
         }
       };
 
+      // Suscripción al canal de mensajes del worker
       worker.addEventListener('message', listener);
+      // Notificamos al worker qué archivo específico debe procesar/preparar
       worker.postMessage({ type: 'DOWNLOAD_ONE_CSV', payload: name });
     });
+  }
+
+  getMetrics = () => {
+    try {
+      this.broadcast('GET_METRICS');
+    } catch (error: any) {
+      console.error('Se produjo un error al recoger las métricas de los workers: ', error);
+    }
   }
 
   toggleInitializedSimulation = (intialized: boolean) => {
@@ -232,7 +318,7 @@ export class SimulationService {
       this.runingSubject.next(!this.runingSubject.value);
       const isPlaying = this.runingSubject.value;
 
-      this.broadcast('PLAY_PAUSE', isPlaying)
+      this.broadcast('PLAY_PAUSE', isPlaying);
 
     } catch (error) {
       this.toggleInitializedSimulation(false);
@@ -259,12 +345,11 @@ export class SimulationService {
   }
 
   // Función para crear un canal de comunicación entre los Workers
-  private createChannel(firstWorker: Worker, secondWorker: Worker) {
+  private createChannel(emisorWorker: Worker, receptorWorker: Worker) {
     const channel = new MessageChannel();
 
-    firstWorker.postMessage({ type: 'CONNECT_CHANNEL', payload: Communication.emisor }, [channel.port1]);
-    secondWorker.postMessage({ type: 'CONNECT_CHANNEL', payload: Communication.receptor }, [channel.port2]);
-    console.log('Service: Canal directo establecido entre Broker y Categoriser.');
+    emisorWorker.postMessage({ type: 'CONNECT_CHANNEL', payload: Communication.emisor }, [channel.port1]);
+    receptorWorker.postMessage({ type: 'CONNECT_CHANNEL', payload: Communication.receptor }, [channel.port2]);
   }
 
   // Función para enviar un mensaje a TODOS los workers

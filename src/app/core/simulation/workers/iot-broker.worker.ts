@@ -31,7 +31,7 @@ const storageFiles = new FileStorageManager();
 const MY_FILES: FileObject[] = [
   {
     name: iotBrokerFilesName.fileNameSummary,
-    header: "Timestamp; Shipment; Messages generated in shipment; Queue Classic lenght; Queue New lenght; Next shipment; Total produced"
+    header: "Timestamp; Shipment; Messages generated in shipment; Queue lenght; Next shipment; Total produced"
   },
   {
     name: iotBrokerFilesName.fileNamePathRest,
@@ -53,8 +53,9 @@ let countShipment = 0; // Contador de remesas
 let isRuning = false;
 let genMsgTimeout: any;
 
+let totalMessageShipment: number[] = [];
+
 //! Variables editables de IoT-Broker
-//* Máximo y mínimo de mensajes a generar por remesa
 
 let iniTimestamp = Date.now();
 
@@ -73,6 +74,16 @@ const shipmentChange = 500;  // Cada X remesas cambiamos de día a noche o vicev
 
 let producedMessages = 0; // Contador de cuantos mensajes lleva hasta ahora
 let isDay = true;        // Define si es de dia
+
+let isDebug = false;
+const originalLog = console.log;
+
+console.log = (...args: any[]) => {
+  // SOLO si el flag interno es true, se ejecuta el log original
+  if (isDebug) {
+    originalLog.apply(console, args);
+  }
+};
 
 // Función para generar una prioridad aleatoria entre min y max (ambos inclusive)
 const genPriority = () => {
@@ -109,8 +120,8 @@ const genMsg = () => {
   // Si han pasado el número de remesas para hacer el cambio de ciclo
   if (changeDayNight && countShipment % shipmentChange === 0) {
     isDay = !isDay;
-    // console.log(`----------- CHANGE TO ${isDay ? 'DAY' : 'NIGHT'} -----------`)
-  }
+    console.log(`----------- CHANGE TO ${isDay ? 'DAY' : 'NIGHT'} -----------`)
+  } else if (!changeDayNight && !isDay) isDay = true;
 
   let newGroupMsgs = 0;
   if (producedMessages > totalMessages) newGroupMsgs = 0; // Si hemos superado el máximo, no generamos más
@@ -121,6 +132,8 @@ const genMsg = () => {
     // Si es de noche aplicamos la reducción
     if (changeDayNight && !isDay) newGroupMsgs = Math.round(newGroupMsgs * factorNight);
   }
+
+  totalMessageShipment.push(newGroupMsgs);
 
   let registerMessages = ``;
   let registerReducedMessage = '';
@@ -139,9 +152,6 @@ const genMsg = () => {
 
     registerReducedMessage += timeReg + ";" + countShipment + ";" + uidMsg + ";" + priority + '\n';
 
-
-    // ToDo: Ver que hacer con la generacion de mensajes con TEMPLATE
-    //! PROBLEMA: SE HA DESACTIVADO PORQUE NO SE SABE COMO GESTIONAR LOS PROBLEMAS DE MEMORIA QUE GENERA ESTE ARCHIVO.
     let msgToRegister = templateMsg.replace(/\*\*TIME\*\*/g, timeReg.toString());
     msgToRegister = msgToRegister.replace(/\*\*DEV_EUI\*\*/g, priority.toString());
     msgToRegister = msgToRegister.replace(/\*\*UNIQUE_ID\*\*/g, uidMsg);
@@ -209,6 +219,7 @@ const sendMessages = (messageId: number, numMsgsToExtract: number = 1000) => {
       queueSize: msgQueue.length // Enviamos el tamaño para debug
     }
   });
+
 }
 
 const initializeIotBroker = async () => {
@@ -254,6 +265,22 @@ const updateConfig = (newConfig: any) => {
 
   console.log('Nuevo objeto config:', config);
 }
+
+const sendMetrics = () => {
+
+  postMessage({
+    type: 'METRICS_RESPONSE',
+    payload: {
+      queueSize: msgQueue.length,
+      totalProduced: producedMessages,
+      timestamp: (Date.now() - iniTimestamp) / 1000,
+      generatedMessages: totalMessageShipment
+    }
+  })
+
+  totalMessageShipment = []; // Lo reiniciamos
+}
+
 // Controlador de eventos. Escuchamos desde simulation.service
 addEventListener('message', (event) => {
   const { type, payload } = event.data;
@@ -264,14 +291,12 @@ addEventListener('message', (event) => {
       categoriserPort = event.ports[0];
       configureCategoriserPort();
       break;
-    // Inicializamos el sistema
+
     case 'START':
       console.log('Broker Worker: Sistema iniciado');
       initializeIotBroker();
-
       break;
 
-    // ToDo: Incluir la funcionalidad para STOP, PAUSE y CONFIGURE
     case 'STOP':
       isRuning = false;
       stopLaunch(true);
@@ -279,24 +304,20 @@ addEventListener('message', (event) => {
       break;
 
     case 'PLAY_PAUSE':
-
       togglePlayPause(payload);
       break;
 
     case 'CONFIGURE':
       updateConfig(payload)
-
       break;
 
     case 'DOWNLOAD_ONE_CSV':
-
       downloadCSV(payload);
       break;
 
-    case 'DOWNLOAD_ALL_CSV':
-
+    case 'GET_METRICS':
+      sendMetrics();
       break;
-
   }
 
 });

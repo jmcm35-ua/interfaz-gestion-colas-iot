@@ -100,7 +100,6 @@ export class ConfigurationComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy() {
-    // ¡Muy importante limpiar la suscripción para evitar memory leaks!
     if (this.subToInitalizedSim) {
       this.subToInitalizedSim.unsubscribe();
     }
