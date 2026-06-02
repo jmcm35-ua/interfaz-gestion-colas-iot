@@ -27,9 +27,14 @@ let isRuning = false;
 let consumeMessagesTimeout: any;
 
 let iniTimestamp = Date.now();
-const readMsgPriority: any[] = []; // Numero de elementos leidos por prioridad
+let totalPausedTime = 0; // Acumula el tiempo que pasamos en pausa
+let pauseStartTimestamp = 0;
 
 //! Variables para procesar metricas
+let readMsgPriority: any[] = []; // Numero de elementos leidos por prioridad
+
+let messagesExpired: number[] = []; // Esto es para las metricas. Guardamos los mensajes que llegan caducados
+
 let totalWaitTime: number[] = []; // Acumulado de tiempo de espera
 let timePerPriority: number[] = []; // Promedio de tiempo de cada cola
 
@@ -49,9 +54,16 @@ console.log = (...args: any[]) => {
   }
 };
 
-
 const writeLog = (fileName: string, message: string, printTimestamp: boolean = true) => {
-  storageFiles.write(fileName, iniTimestamp, message, printTimestamp);
+  const virtualIniTimestamp = iniTimestamp + totalPausedTime;
+  storageFiles.write(fileName, virtualIniTimestamp, message, printTimestamp);
+};
+
+const getSimulationTime = (): number => {
+  if (!isRuning) {
+    return pauseStartTimestamp - iniTimestamp - totalPausedTime;
+  }
+  return Date.now() - iniTimestamp - totalPausedTime;
 };
 
 const preprareHeaders = () => {
@@ -73,6 +85,7 @@ const updatePriorityMessages = () => {
     readMsgPriority.push(...newQueues);
     timePerPriority.push(...newQueues);
     totalWaitTime.push(...newQueues);
+    messagesExpired.push(...newQueues)
 
   } //! Si se hace más pequeño no deberiamos de eliminar as existentes...
 
@@ -94,16 +107,16 @@ const consumeMessages = async () => {
   const { extractedMessages } = await getDispatcherMessages();
 
 
-  if (!extractedMessages || extractedMessages.length === 0) {
-    console.error('Messages could not be obtained from the dispatcher.');
-    return;
-  }
+  // if (!extractedMessages || extractedMessages.length === 0) {
+  //   console.error('Messages could not be obtained from the dispatcher.');
+  //   return;
+  // }
 
   let register = '';
   // Para cada mensaje leido vamos a escribir en el archivo sus datos
-  const currentTime = Date.now() - iniTimestamp;
+  const currentTime = getSimulationTime();
   extractedMessages.forEach((msg: Message) => {
-    const { priority, id, shipment, timestamp } = msg;
+    const { priority, id, shipment, timestamp, expired } = msg;
     const pIndex = priority - 1;
 
 
@@ -111,6 +124,8 @@ const consumeMessages = async () => {
     totalWaitTime[pIndex] += waitTime;
 
     readMsgPriority[pIndex]++;
+
+    if (expired) messagesExpired[pIndex]++;
 
     // Sacamos el promedio con el total de tiempo / total de mensajes de la cola
     timePerPriority[pIndex] = Math.trunc(totalWaitTime[pIndex] / readMsgPriority[pIndex]);
@@ -149,6 +164,9 @@ const runConsumeMessagesLoop = async () => {
 const initializeConsumer = async () => {
   // Iniciamos el tiempo
   iniTimestamp = Date.now();
+  totalPausedTime = 0;
+  pauseStartTimestamp = 0;
+
   await storageFiles.init(MY_FILES);
   updatePriorityMessages();
   isRuning = true;
@@ -165,13 +183,16 @@ const downloadCSV = async (name: string) => {
 }
 
 const togglePlayPause = async (simulationIsRuning: boolean) => {
-  isRuning = simulationIsRuning; // El estado se gestiona desde el servicio de simulacion
-  if (!isRuning) {
+  const wasRuning = isRuning;
+  isRuning = simulationIsRuning;
+
+  if (!isRuning && wasRuning) {
+    pauseStartTimestamp = Date.now();
     stopLaunch();
   }
-  else {
+  else if (isRuning && !wasRuning) {
+    totalPausedTime += Date.now() - pauseStartTimestamp;
     launch();
-
   }
   console.log(`CONSUMER Worker: Sistema ${isRuning ? 'REANUDADO' : 'PAUSADO'}`);
 }
@@ -180,7 +201,15 @@ const stopLaunch = (endSimulation: boolean = false) => {
   isRuning = false;
   if (consumeMessagesTimeout) clearTimeout(consumeMessagesTimeout);
 
-  if (endSimulation) storageFiles.closeAll();
+  if (endSimulation) {
+    storageFiles.closeAll();
+    // Reiniciamos los valores
+    readMsgPriority = []
+    totalWaitTime = [];
+    timePerPriority = [];
+    messagesExpired = [];
+  }
+
 }
 
 const updateConfig = (newConfig: any) => {
@@ -191,12 +220,16 @@ const updateConfig = (newConfig: any) => {
   console.log('Nuevo objeto config:', config);
 }
 
-const sendMetrics = () => {
+const sendMetrics = (idSimulation: number) => {
   postMessage({
     type: 'METRICS_RESPONSE',
     payload: {
-      readByPriority: readMsgPriority,
-      timePerPriority: timePerPriority
+      idSimulation,
+      metrics: {
+        readByPriority: readMsgPriority,
+        timePerPriority: timePerPriority,
+        messagesExpired: messagesExpired
+      }
     }
   })
 }
@@ -241,7 +274,7 @@ addEventListener('message', (event) => {
       break;
 
     case 'GET_METRICS':
-      sendMetrics();
+      sendMetrics(payload);
       break;
   }
 });

@@ -13,11 +13,11 @@ export class FileStorageManager {
       this.writers.set(file.name, await handle.createSyncAccessHandle());
       this.truncateFile(this.writers.get(file.name)!);
 
-      this.write(file.name, null, file.header, false);
+      this.write(file.name, null, file.header, false, true);
     }
   }
 
-  write(fileName: string, iniTimestamp: any, message: string, printTimestamp: boolean) {
+  write(fileName: string, iniTimestamp: any, message: string, printTimestamp: boolean, ignoreSize: boolean = false) {
     const writer = this.writers.get(fileName);
     if (!writer) return;
 
@@ -27,7 +27,7 @@ export class FileStorageManager {
     const buffer = encoder.encode(finalMessage);
 
     // IMPORTANTE: Obtenemos el tamaño actual y escribimos justo ahí (al final)
-    const currentSize = writer.getSize();
+    const currentSize = ignoreSize ? 0 : writer.getSize();
     writer.write(buffer, { at: currentSize });
 
     writer.flush();

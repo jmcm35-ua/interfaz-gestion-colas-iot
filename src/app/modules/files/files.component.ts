@@ -26,7 +26,6 @@ export class FilesComponent {
 
       if (isInit) {
         this.simulationService.fileWorkerMap.forEach((worker, fileName) => {
-          console.log('Nombre de este archivo:', fileName);
           this.files.push({ name: fileName });
         });
       }

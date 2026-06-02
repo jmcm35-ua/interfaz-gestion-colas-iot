@@ -6,16 +6,20 @@ import { Chart, registerables } from 'chart.js';
 import zoomPlugin from 'chartjs-plugin-zoom';
 import { CommonModule } from '@angular/common';
 
+import { MatIcon } from "@angular/material/icon";
+import { MatButtonModule } from '@angular/material/button';
+import { MatTooltipModule } from '@angular/material/tooltip';
+
 Chart.register(...registerables);
 
 @Component({
   selector: 'app-dashboard',
   standalone: true,
   templateUrl: './dashboard.component.html',
-  imports: [CommonModule],
+  imports: [CommonModule, MatIcon, MatButtonModule, MatTooltipModule],
   styleUrl: './dashboard.component.scss'
 })
-export class DashboardComponent implements OnInit, OnDestroy, AfterViewInit {
+export class DashboardComponent implements OnInit, OnDestroy {
   private metricsSub!: Subscription;
   private charts: { [key: string]: Chart } = {};
   private subToInitalizedSim: Subscription | undefined;
@@ -47,6 +51,7 @@ export class DashboardComponent implements OnInit, OnDestroy, AfterViewInit {
   @ViewChild('scatterBroker') scatterRef!: ElementRef;
   @ViewChild('pieCategoriser') pieRef!: ElementRef;
   @ViewChild('lineConsumer') lineRef!: ElementRef;
+  @ViewChild('expiredBar') barRef !: ElementRef;
   @ViewChild('totalMessages') totalMessages !: ElementRef;
 
   dataQueuesTime: number[] = [];
@@ -61,12 +66,22 @@ export class DashboardComponent implements OnInit, OnDestroy, AfterViewInit {
 
     this.subToInitalizedSim = this.simulationService.isInitialized$.subscribe(isInit => {
 
-      if (isInit)
+      if (isInit) {
+        this.resetCharts();
         this.initializeCharts();
+      }
     });
   }
 
-  ngAfterViewInit(): void {
+  downloadChart(chart: string) {
+    const img = this.charts[chart].canvas.toDataURL("img/png");
+
+    const downloadLink = document.createElement('a');
+    downloadLink.href = img;
+    downloadLink.download = chart + '.png';
+
+    downloadLink.click();
+    console.log(downloadLink)
   }
 
   private initializeCharts() {
@@ -82,15 +97,17 @@ export class DashboardComponent implements OnInit, OnDestroy, AfterViewInit {
         },
         plugins: {
           zoom: {
+            pan: {
+              enabled: true,
+              mode: 'x',
+              modifierKey: 'ctrl',
+            },
             zoom: {
-              wheel: {
-                enabled: true,
-              },
-              pinch: {
+              drag: {
                 enabled: true
               },
-              mode: 'xy',
-            }
+              mode: 'x',
+            },
           }
         }
       },
@@ -122,28 +139,89 @@ export class DashboardComponent implements OnInit, OnDestroy, AfterViewInit {
         },
         plugins: {
           zoom: {
-            zoom: {
-              wheel: { enabled: true },
-              pinch: { enabled: true },
-              mode: 'x',
-            },
-            limits: {
-              x: { min: 'original', max: 100000 }
-            },
             pan: {
               enabled: true,
               mode: 'x',
-            }
+              modifierKey: 'ctrl',
+            },
+            zoom: {
+              drag: {
+                enabled: true
+              },
+              mode: 'x',
+            },
           }
         }
       }
     });
+
+    this.charts['expiredBar'] = new Chart(this.barRef.nativeElement, {
+      type: 'bar',
+      data: {
+        labels: [],
+        datasets: [
+          {
+            label: 'Válidos',
+            data: [],
+            backgroundColor: this.colors[0]
+          },
+          {
+            label: 'Expirados',
+            data: [],
+            backgroundColor: this.colors[3]
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+          x: {
+            stacked: true,
+          },
+          y: {
+            stacked: true
+          }
+        }
+      }
+    })
+  }
+
+  private resetCharts() {
+
+    Object.values(this.charts).forEach(chart => {
+      chart.destroy();
+    })
+
+    this.charts = {};
+
+    if (this.totalMessages?.nativeElement) this.totalMessages.nativeElement.innerText = '0';
+    if (this.dataQueuesTime) this.dataQueuesTime = [];
   }
 
   private updateAllCharts(snapshot: WorkerMetricsSnapshot) {
     this.updateScatterChart(snapshot);
     this.updatePieChart(snapshot);
     this.updateLineChart(snapshot);
+    this.updateBarChart(snapshot)
+  }
+
+  private updateBarChart(snapshot: WorkerMetricsSnapshot) {
+    const chart = this.charts['expiredBar'];
+    const expiredMessages = snapshot.consumer.messagesExpired;
+    const totalReceivedMessages = snapshot.consumer.readByPriority;
+
+    const correctMessages = totalReceivedMessages.map((totalCorrect, index) => totalCorrect - expiredMessages[index]);
+
+    if (expiredMessages.length > chart.data.labels!.length) {
+      for (let i = chart.data.labels!.length; i < expiredMessages.length; i++) {
+        chart.data.labels!.push(`Cola ${i + 1}`);
+      }
+    }
+    chart.data.datasets[0].data = [...correctMessages]
+    chart.data.datasets[1].data = [...expiredMessages];
+
+    chart.update('none');
   }
 
   private updatePieChart(snapshot: WorkerMetricsSnapshot) {
@@ -167,29 +245,55 @@ export class DashboardComponent implements OnInit, OnDestroy, AfterViewInit {
 
   private updateLineChart(snapshot: WorkerMetricsSnapshot) {
     const chart = this.charts['categoriser'];
-    const data = snapshot.categoriser.queuesLength;
+    const data = snapshot.categoriser.queuesLength; // Supongamos que vienen 'N' elementos
 
-    // Ajuste dinámico de líneas
-    if (data.length > chart.data.datasets.length) {
-      for (let i = chart.data.datasets.length; i < data.length; i++) {
-        chart.data.datasets.push({ label: `Prio ${i + 1}`, data: [], borderColor: this.getColor(i), radius: 0, borderWidth: 1 });
+    // Total de líneas que necesitamos: Las 'N' colas + 1 de expirados
+    const totalRequiredLines = data.length + 1;
+
+    // 1. Ajuste dinámico de líneas (creación de datasets si no existen)
+    if (totalRequiredLines > chart.data.datasets.length) {
+      for (let i = chart.data.datasets.length; i < totalRequiredLines; i++) {
+        // Si es el índice 0, es Expirados. Si no, restamos 1 para que empiece en Q1, Q2...
+        const label = i === 0 ? 'Expirados' : `Q${i}`;
+        const color = this.getColor(i === 0 ? this.colors.length - 1 : i); // Evitamos desbordar el array de colores
+
+        chart.data.datasets.push({
+          label: label,
+          data: [],
+          backgroundColor: color,
+          borderColor: color,
+          radius: 0,
+          borderWidth: 1
+        });
       }
     }
-    data.forEach((val, idx) => {
-      (chart.data.datasets[idx].data as any[]).push({ x: snapshot.timestamp, y: val });
+
+    // Actualizamos la linea de expirados
+    (chart.data.datasets[0].data as any[]).push({
+      x: snapshot.timestamp,
+      y: snapshot.categoriser.expirationQueue
     });
+
+    // Actualizamos las lineas de cada cola
+    data.forEach((val, idx) => {
+      (chart.data.datasets[idx + 1].data as any[]).push({
+        x: snapshot.timestamp,
+        y: val
+      });
+    });
+
     chart.update('none');
   }
 
   private updateScatterChart(snapshot: WorkerMetricsSnapshot) {
-    // Aquí puedes implementar una lógica de "throttling" o "intervalo"
-    // para que este gráfico no se actualice tan seguido como los otros.
     const chart = this.charts['broker'];
     const generatedMessages = snapshot.iotBroker.generatedMessages;
 
+    if (Object.values(generatedMessages).length === 0) return;
+
     this.totalMessages.nativeElement.innerHTML = snapshot.iotBroker.totalProduced;
     if (generatedMessages)
-      (chart.data.datasets[0].data as any[]).push(...generatedMessages.map(gen => ({ x: snapshot.timestamp, y: gen })));
+      (chart.data.datasets[0].data as any[]).push(...generatedMessages.map(gen => ({ x: gen.time, y: gen.total })));
     else
       (chart.data.datasets[0].data as any[]).push({ x: 0, y: 0 });
 
@@ -199,6 +303,10 @@ export class DashboardComponent implements OnInit, OnDestroy, AfterViewInit {
 
   private getColor(index: number): string {
     return this.colors[index]
+  }
+
+  resetZoom(chart: string) {
+    this.charts[chart].resetZoom();
   }
 
   ngOnDestroy(): void {

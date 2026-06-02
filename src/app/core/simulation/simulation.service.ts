@@ -18,6 +18,8 @@ export class SimulationService {
   private runingSubject = new BehaviorSubject<boolean>(false);
   public isRuning$ = this.runingSubject.asObservable();
 
+  idSimulation = 0;
+
   // Última prioridad registrada
   private lastPriorityLength = 4;
 
@@ -53,7 +55,7 @@ export class SimulationService {
       consumer: new Worker(new URL('./workers/consumer.worker', import.meta.url))
     };
 
-    console.log("Workers inicializados correctamente");
+    // console.log("Workers inicializados correctamente");
 
     // Establecer canales
     this.createChannel(this.workers.iotBroker, this.workers.categoriser);
@@ -63,26 +65,26 @@ export class SimulationService {
 
   // Función para configurar las métricas
   // Agregamos unos listener a los workers para capturar los mensajes de metricas
-  // Creamos 
   private setupGlobalMetricsCollector() {
     Object.entries(this.workers).forEach(([workerID, worker]) => {
       worker.addEventListener('message', (event: MessageEvent) => {
         const { type, payload } = event?.data;
 
-        if (type === 'METRICS_RESPONSE') {
-          this.collectedMetrics[workerID] = payload;
+        if (type === 'METRICS_RESPONSE' && payload.idSimulation === this.idSimulation) {
+          this.collectedMetrics[workerID] = payload.metrics;
         }
       })
     });
 
     this.pollSubscription = this.isRuning$.pipe(
       switchMap(isRuning =>
-        isRuning ? interval(100) : of(null)
+        isRuning ? interval(1000) : of(null)
       ),
       filter(tick => tick !== null)
     ).subscribe(() => {
       // Si esta corriendo el reloj (intervalo cada segundo)
-      this.broadcast('GET_METRICS');
+      this.broadcast('GET_METRICS', this.idSimulation);
+
 
       // SI existe nuestro recolector de metricas, configuramos el observable para que el componente dashboard reciba la actualización
       if (Object.keys(this.collectedMetrics).length > 0) {
@@ -92,18 +94,19 @@ export class SimulationService {
           iotBroker: {
             queueSize: this.collectedMetrics['iotBroker']?.queueSize || 0,
             totalProduced: this.collectedMetrics['iotBroker']?.totalProduced || 0,
-            generatedMessages: this.collectedMetrics['iotBroker']?.generatedMessages || 0
+            generatedMessages: this.collectedMetrics['iotBroker']?.generatedMessages || []
           },
           categoriser: {
-            queuesLength: this.collectedMetrics['categoriser']?.queuesLength || 0,
+            queuesLength: this.collectedMetrics['categoriser']?.queuesLength || [],
             expirationQueue: this.collectedMetrics['categoriser']?.expirationQueue || 0
           },
           dispatcher: {
             sortPriorityQueue: this.collectedMetrics['dispatcher']?.sortPriorityQueue || 0,
           },
           consumer: {
-            readByPriority: this.collectedMetrics['consumer']?.readByPriority || 0,
-            timePerPriority: this.collectedMetrics['consumer']?.timePerPriority || 0
+            readByPriority: this.collectedMetrics['consumer']?.readByPriority || [],
+            timePerPriority: this.collectedMetrics['consumer']?.timePerPriority || [],
+            messagesExpired: this.collectedMetrics['consumer']?.messagesExpired || []
           }
         }
 
@@ -111,7 +114,6 @@ export class SimulationService {
       }
     })
   }
-
 
   private buildFileWorkerMap() {
     // Mapeo de cada fichero con el worker correspondiente
@@ -158,7 +160,7 @@ export class SimulationService {
       let changePriorityQueues = false;
 
       if (newConfig?.iotBroker) {
-        //Damos formato al objeto config de IoT-Broker
+        // Damos formato al objeto config de IoT-Broker
         const configToSendIotBroker = this.prepareObjectConfig(newConfig.iotBroker);
 
         if (configToSendIotBroker?.weights && configToSendIotBroker?.weights.length !== this.lastPriorityLength) {
@@ -254,7 +256,7 @@ export class SimulationService {
 
       // Cerramos el archivo de escritura para asegurar que estos se escriben en el disco
       await writable.close();
-      console.log('Archivo movido con éxito al disco local');
+      // console.log('Archivo movido con éxito al disco local');
 
     } catch (err: any) {
       if (err.name === 'AbortError') return;
@@ -329,10 +331,16 @@ export class SimulationService {
   startSimulation = () => {
     // Iniciamos el worker
     try {
+
+      this.idSimulation++;
+
+      this.collectedMetrics = {};
+      this.metricsSubject.next(null);
+
       this.toggleInitializedSimulation(true);
       this.runingSubject.next(true);
 
-      this.broadcast('START')
+      this.broadcast('START');
 
     } catch (error) {
       this.toggleInitializedSimulation(false);

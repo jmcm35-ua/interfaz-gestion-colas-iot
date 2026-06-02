@@ -32,10 +32,10 @@ const MY_FILES: FileObject[] = [
 ];
 
 const maxPriority = 1; // Maxima prioridad
+const baseExpirationTime = [5000, 10000, 20000, 60000];
 
 let priorityMsgQueues: Message[][] = [];
 let priorityExpirationTimeQueue: number[] = [];
-const baseExpirationTime = [5000, 10000, 20000, 60000];
 let expirationMsgQueue: Message[] = [];
 
 let config: CategoriserConfig = {
@@ -46,7 +46,10 @@ let config: CategoriserConfig = {
   timeToReadIotBroker: 500 // Tiempo para leer del broker
 }
 
-let initialTimestamp = Date.now(); // Cuando se inicia el sistema
+let iniTimestamp = Date.now(); // Cuando se inicia el sistema
+let totalPausedTime = 0; // Acumula el tiempo que pasamos en pausa
+let pauseStartTimestamp = 0;
+
 let isRuning = false;
 let classifyTimeout: any;
 let expirationTimeout: any;
@@ -61,18 +64,29 @@ console.log = (...args: any[]) => {
   }
 };
 
-
 const writeLog = (fileName: string, message: string, printTimestamp: boolean = true) => {
-  storageFiles.write(fileName, initialTimestamp, message, printTimestamp);
+  const virtualIniTimestamp = iniTimestamp + totalPausedTime;
+  storageFiles.write(fileName, virtualIniTimestamp, message, printTimestamp);
+};
+
+const getSimulationTime = (): number => {
+  if (!isRuning) {
+    return pauseStartTimestamp - iniTimestamp - totalPausedTime;
+  }
+  return Date.now() - iniTimestamp - totalPausedTime;
 };
 
 const initiliazeCategoriser = async () => {
-  initialTimestamp = Date.now(); // Cuando se inicia el sistema
+  iniTimestamp = Date.now(); // Cuando se inicia el sistema
   // ToDo: hay que inicializar baseExpirationTime dependiendo del número de colas
   // Incializamos cada cola a una lista vacía y los expiration time
+  totalPausedTime = 0;
+  pauseStartTimestamp = 0;
+
   await storageFiles.init(MY_FILES);
   updateCategoriserStructure();
   isRuning = true;
+
   launch(); // Comienza el ciclo de lectura y categorizacion
 }
 
@@ -225,7 +239,7 @@ const showQueuesStatus = () => {
 const expirationMsgQueueHandler = async () => {
   const { expirationMaxQueueMsg } = config;
   console.log("************ Checking message expirations ************");
-  const now = Date.now() - initialTimestamp;
+  const now = getSimulationTime();
   let expiredCount = 0;
   let totalExpired = 0;
   let reg = "";
@@ -236,6 +250,9 @@ const expirationMsgQueueHandler = async () => {
     while (msgQueue.length > 0 && (now - msgQueue[0].timestamp) > priorityExpirationTimeQueue[index]) {
       // extaemos el mensaje expirado y lo añadimos a la cola de expiraciones
       const expiredMsg: Message | undefined = msgQueue.shift();
+      if (expiredMsg === undefined) continue;
+
+      expiredMsg.expired = true; // Se agrega para saber cuantos han caducado
       expirationMsgQueue.push(expiredMsg as Message);
       expiredCount++;
     }
@@ -388,28 +405,40 @@ const stopLaunch = (endSimulation: boolean = false) => {
   if (classifyTimeout) clearTimeout(classifyTimeout);
   if (expirationTimeout) clearTimeout(expirationTimeout);
 
-  if (endSimulation) storageFiles.closeAll();
+  if (endSimulation) {
+    storageFiles.closeAll();
+
+    // Se reinician los datos
+    priorityMsgQueues = [];
+    priorityExpirationTimeQueue = [];
+    expirationMsgQueue = [];
+  }
 }
 
 const togglePlayPause = async (simulationIsRuning: boolean) => {
-  isRuning = simulationIsRuning; // El estado se gestiona desde el servicio de simulacion
-  if (!isRuning) {
+  const wasRuning = isRuning;
+  isRuning = simulationIsRuning;
+
+  if (!isRuning && wasRuning) {
+    pauseStartTimestamp = Date.now();
     stopLaunch();
   }
-  else {
-    // await initializeWriters(false);
+  else if (isRuning && !wasRuning) {
+    totalPausedTime += Date.now() - pauseStartTimestamp;
     launch();
-
   }
   console.log(`CATEGORISER Worker: Sistema ${isRuning ? 'REANUDADO' : 'PAUSADO'}`);
 }
 
-const sendMetrics = () => {
+const sendMetrics = (idSimulation: number) => {
   postMessage({
     type: 'METRICS_RESPONSE',
     payload: {
-      queuesLength: priorityMsgQueues.map(q => q.length),
-      expirationQueue: expirationMsgQueue.length,
+      idSimulation,
+      metrics: {
+        queuesLength: priorityMsgQueues.map(q => q.length),
+        expirationQueue: expirationMsgQueue.length,
+      }
     }
   })
 }
@@ -464,7 +493,7 @@ addEventListener('message', (event) => {
       break;
 
     case 'GET_METRICS':
-      sendMetrics();
+      sendMetrics(payload);
       break;
   }
 });

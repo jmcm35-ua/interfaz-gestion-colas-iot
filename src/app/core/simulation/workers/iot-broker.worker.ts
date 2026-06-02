@@ -47,17 +47,22 @@ const MY_FILES: FileObject[] = [
   }
 ]
 
-let msgQueue: Message[] = []; // Cola de mensajes
-let countShipment = 0; // Contador de remesas
 
 let isRuning = false;
 let genMsgTimeout: any;
 
-let totalMessageShipment: number[] = [];
+// Variables a reiniciar
+let msgQueue: Message[] = []; // Cola de mensajes
+let countShipment = 0; // Contador de remesas
+let totalMessageShipment: { time: number, total: number }[] = []; // Para las métricas de la gráfica de dispersion
+let producedMessages = 0; // Contador de cuantos mensajes lleva hasta ahora
 
 //! Variables editables de IoT-Broker
 
 let iniTimestamp = Date.now();
+// Variables para manejar el tiempo que ha estado pausado el sistema y que de este modo no afecte al procesamiento interno del tiempo
+let totalPausedTime = 0;
+let pauseStartTimestamp = 0;
 
 let config: IoTBrokerConfig = {
   maxMsg: 1000,         // Máximo número de mensajes por remesa
@@ -72,7 +77,6 @@ let config: IoTBrokerConfig = {
 
 const shipmentChange = 500;  // Cada X remesas cambiamos de día a noche o viceversa
 
-let producedMessages = 0; // Contador de cuantos mensajes lleva hasta ahora
 let isDay = true;        // Define si es de dia
 
 let isDebug = false;
@@ -104,7 +108,19 @@ const genPriority = () => {
 }
 
 const writeLog = (fileName: string, message: string, printTimestamp: boolean = true) => {
-  storageFiles.write(fileName, iniTimestamp, message, printTimestamp);
+  // Desplazamos el inicio original sumándole el tiempo total que estuvo pausado
+  const virtualIniTimestamp = iniTimestamp + totalPausedTime;
+  storageFiles.write(fileName, virtualIniTimestamp, message, printTimestamp);
+};
+
+const getSimulationTime = (): number => {
+  if (!isRuning) {
+    // Si estamos en pausa, el tiempo actual es el momento en que pausamos, 
+    // menos el inicio, menos las pausas anteriores.
+    return pauseStartTimestamp - iniTimestamp - totalPausedTime;
+  }
+  // Si estamos corriendo, es el momento actual, menos el inicio, menos las pausas.
+  return Date.now() - iniTimestamp - totalPausedTime;
 };
 
 
@@ -133,13 +149,13 @@ const genMsg = () => {
     if (changeDayNight && !isDay) newGroupMsgs = Math.round(newGroupMsgs * factorNight);
   }
 
-  totalMessageShipment.push(newGroupMsgs);
+  totalMessageShipment.push({ time: getSimulationTime() / 1000, total: newGroupMsgs });
 
   let registerMessages = ``;
   let registerReducedMessage = '';
   for (let i = 0; i < newGroupMsgs; i++) {
     const priority = genPriority(); // Prioridad con la que nace el mensajes
-    const timeReg = Date.now() - iniTimestamp; // Hora en la que se regista
+    const timeReg = getSimulationTime(); // Hora en la que se regista
     const uidMsg = countShipment + '-' + i; // Identificador del mensaje
 
     msgQueue.push({
@@ -228,6 +244,9 @@ const initializeIotBroker = async () => {
   isRuning = true;
   await storageFiles.init(MY_FILES);
 
+  totalPausedTime = 0;
+  pauseStartTimestamp = 0;
+
   genMsg();
 }
 
@@ -243,22 +262,54 @@ const downloadCSV = async (name: string) => {
 const stopLaunch = (endSimulation: boolean = false) => {
   if (genMsgTimeout) clearTimeout(genMsgTimeout);
 
-  if (endSimulation) storageFiles.closeAll();
+  if (endSimulation) {
+    storageFiles.closeAll();
+
+    // Reiniciamos los valores internos
+    msgQueue = [];
+    countShipment = 0;
+    producedMessages = 0;
+    totalMessageShipment = [];
+
+    totalPausedTime = 0;
+    pauseStartTimestamp = 0;
+  }
 }
+
+// const togglePlayPause = async (simulationIsRuning: boolean) => {
+//   isRuning = simulationIsRuning; // El estado se gestiona desde el servicio de simulacion
+//   if (!isRuning) {
+//     stopLaunch();
+
+//   }
+//   else {
+//     // await initializeWriters(false);
+//     genMsg();
+
+//   }
+//   console.log(`Broker Worker: Sistema ${isRuning ? 'REANUDADO' : 'PAUSADO'}`);
+// }
 
 const togglePlayPause = async (simulationIsRuning: boolean) => {
-  isRuning = simulationIsRuning; // El estado se gestiona desde el servicio de simulacion
-  if (!isRuning) {
-    stopLaunch();
+  // Guardamos el estado ANTERIOR antes de actualizarlo
+  const wasRuning = isRuning;
+  isRuning = simulationIsRuning;
 
-  }
-  else {
-    // await initializeWriters(false);
+  if (!isRuning && wasRuning) {
+    // ACABAMOS DE PAUSAR
+    pauseStartTimestamp = Date.now(); // Guardamos el momento de la pausa
+    stopLaunch(); // Detenemos los timeouts
+    console.log('Worker: Sistema PAUSADO');
+
+  } else if (isRuning && !wasRuning) {
+    // ACABAMOS DE REANUDAR
+    const pauseDuration = Date.now() - pauseStartTimestamp; // Cuánto duró esta pausa
+    totalPausedTime += pauseDuration; // Lo sumamos al total histórico
+
     genMsg();
-
+    console.log('Worker: Sistema REANUDADO');
   }
-  console.log(`Broker Worker: Sistema ${isRuning ? 'REANUDADO' : 'PAUSADO'}`);
-}
+};
 
 const updateConfig = (newConfig: any) => {
   config = { ...config, ...newConfig };
@@ -266,15 +317,18 @@ const updateConfig = (newConfig: any) => {
   console.log('Nuevo objeto config:', config);
 }
 
-const sendMetrics = () => {
+const sendMetrics = (idSimulation: number) => {
 
   postMessage({
     type: 'METRICS_RESPONSE',
     payload: {
-      queueSize: msgQueue.length,
-      totalProduced: producedMessages,
-      timestamp: (Date.now() - iniTimestamp) / 1000,
-      generatedMessages: totalMessageShipment
+      idSimulation,
+      metrics: {
+        queueSize: msgQueue.length,
+        totalProduced: producedMessages,
+        timestamp: getSimulationTime() / 1000,
+        generatedMessages: totalMessageShipment
+      }
     }
   })
 
@@ -316,7 +370,7 @@ addEventListener('message', (event) => {
       break;
 
     case 'GET_METRICS':
-      sendMetrics();
+      sendMetrics(payload);
       break;
   }
 

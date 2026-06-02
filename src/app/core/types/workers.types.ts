@@ -47,7 +47,7 @@ export interface WorkerMetricsSnapshot {
     iotBroker: {
         queueSize: number;        // Mensajes acumulados sin clasificar en el Broker
         totalProduced: number;    // Acumulado histórico de mensajes creados
-        generatedMessages: number[];
+        generatedMessages: { time: number, total: number }[]; // Guardamos el tiempo para hacer correctamente el gráfico de dispersion
     };
     categoriser: {
         queuesLength: any[];   // Array con la longitud actual de cada cola [Q1, Q2, Q3, Q4]
@@ -59,5 +59,6 @@ export interface WorkerMetricsSnapshot {
     consumer: {
         readByPriority: number[]; // Histórico de mensajes procesados por prioridad [P1, P2, P3, P4]
         timePerPriority: number[];
+        messagesExpired: number[];
     };
 }

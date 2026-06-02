@@ -26,6 +26,8 @@ const MY_FILES: FileObject[] = [
 
 // Momento en el que se inició la sesión
 let iniTimestamp = Date.now();
+let totalPausedTime = 0; // Acumula el tiempo que pasamos en pausa
+let pauseStartTimestamp = 0;
 
 // Variable que gestiona si está en funcionamiento el worker
 let isRuning: boolean = false;
@@ -56,9 +58,16 @@ console.log = (...args: any[]) => {
   }
 };
 
-
 const writeLog = (fileName: string, message: string, printTimestamp: boolean = true) => {
-  storageFiles.write(fileName, iniTimestamp, message, printTimestamp);
+  const virtualIniTimestamp = iniTimestamp + totalPausedTime;
+  storageFiles.write(fileName, virtualIniTimestamp, message, printTimestamp);
+};
+
+const getSimulationTime = (): number => {
+  if (!isRuning) {
+    return pauseStartTimestamp - iniTimestamp - totalPausedTime;
+  }
+  return Date.now() - iniTimestamp - totalPausedTime;
 };
 
 // Cramos el array de powerPriority dando más prioridad a la cola 1, la mitad a la 2, la mitad a la 3... y luego convertimos eso en mensjaes de numMessages
@@ -215,10 +224,12 @@ const runReadAndSortLoop = async () => {
   readAndSortTimeout = setTimeout(runReadAndSortLoop, config.timeToReadCategoriser);
 }
 
-const initiliazeDispatcher = async () => {
+const initilizeDispatcher = async () => {
   isRuning = true;
   iniTimestamp = Date.now();
   await storageFiles.init(MY_FILES);
+  totalPausedTime = 0;
+  pauseStartTimestamp = 0;
   configureMsgPerPriority();
   launch();
 }
@@ -226,20 +237,30 @@ const initiliazeDispatcher = async () => {
 const stopLaunch = (endSimulation: boolean = false) => {
   if (readAndSortTimeout) clearTimeout(readAndSortTimeout);
 
-  if (endSimulation) storageFiles.closeAll();
+  if (endSimulation) {
+    storageFiles.closeAll();
+    // Reiniciamos los valores
+    powerPriority = [];
+    msgPerPriority = [];
+    sortPriorityQueue = [];
+  }
+
 }
 
 const togglePlayPause = async (simulationIsRuning: boolean) => {
-  isRuning = simulationIsRuning; // El estado se gestiona desde el servicio de simulacion
-  if (!isRuning) {
+  const wasRuning = isRuning;
+  isRuning = simulationIsRuning;
+
+  if (!isRuning && wasRuning) {
+    pauseStartTimestamp = Date.now();
     stopLaunch();
   }
-  else {
-    // await initializeWriters(false);
+  else if (isRuning && !wasRuning) {
+    totalPausedTime += Date.now() - pauseStartTimestamp;
     launch();
-
   }
-  console.log(`CATEGORISER Worker: Sistema ${isRuning ? 'REANUDADO' : 'PAUSADO'}`);
+  // Corregido también el texto del log que decía CATEGORISER en vez de DISPATCHER
+  console.log(`DISPATCHER Worker: Sistema ${isRuning ? 'REANUDADO' : 'PAUSADO'}`);
 }
 
 const configureConsumerPort = () => {
@@ -270,7 +291,6 @@ const sendMessagesToConsumer = (messageId: number, payload: any) => {
   // desencolo de la cola de mensajes tantos mensajes como dice num
   // extraemos los mensajes del principio de la cola
   const returnMsg = sortPriorityQueue.splice(0, numMsgs);
-
   console.log("******************* get ***************************");
   console.log('Dequeue', numMsgs, 'queue items. Remaining', sortPriorityQueue.length, 'messages in the queue.');
   console.log("******************* END get ***************************\n\n");
@@ -288,11 +308,14 @@ const sendMessagesToConsumer = (messageId: number, payload: any) => {
   });
 }
 
-const sendMetrics = () => {
+const sendMetrics = (idSimulation: number) => {
   postMessage({
     type: 'METRICS_RESPONSE',
     payload: {
-      sortPriorityQueue: sortPriorityQueue.length
+      idSimulation,
+      metrics: {
+        sortPriorityQueue: sortPriorityQueue.length
+      }
     }
   })
 };
@@ -317,7 +340,7 @@ addEventListener('message', (event) => {
 
     case 'START':
       console.log('DISPATCHER Worker: Sistema iniciado');
-      initiliazeDispatcher();
+      initilizeDispatcher();
       break;
 
     case 'PLAY_PAUSE':
@@ -341,7 +364,7 @@ addEventListener('message', (event) => {
       break;
 
     case 'GET_METRICS':
-      sendMetrics();
+      sendMetrics(payload);
       break;
   }
 });
