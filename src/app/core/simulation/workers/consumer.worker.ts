@@ -87,7 +87,7 @@ const updatePriorityMessages = () => {
     totalWaitTime.push(...newQueues);
     messagesExpired.push(...newQueues)
 
-  } //! Si se hace más pequeño no deberiamos de eliminar as existentes...
+  } //! Si se hace más pequeño no deberiamos de eliminar las existentes...
 
   preprareHeaders();
 }

@@ -33,7 +33,7 @@ export class FilesComponent {
   }
 
   ngOnDestroy() {
-    // ¡Muy importante limpiar la suscripción para evitar memory leaks!
+    // Limpiamos la suscripcion
     if (this.subToInitalizedSim) {
       this.subToInitalizedSim.unsubscribe();
     }

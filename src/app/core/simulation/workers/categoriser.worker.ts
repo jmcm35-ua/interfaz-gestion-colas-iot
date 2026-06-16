@@ -275,64 +275,52 @@ const expirationMsgQueueHandler = async () => {
 }
 
 const sendMessagesToDispatcher = (messageId: number, payload: any) => {
-  try {
-    const { minPriority } = config;
-    const { numMsgs, priority } = payload;
+  const { minPriority } = config;
+  const { numMsgs, priority } = payload;
 
-    // Si la prioridad indicada no es válida, devolvemos error
-    if (priority < 0 || priority > minPriority) {
-      // return res.status(400).json({ errors: [{ msg: 'priority It must be a number between 0 and ' + minPriority + '.' }] });
+  // Si la prioridad indicada no es válida, devolvemos error
+  // if (priority < 0 || priority > minPriority) {
+  // return res.status(400).json({ errors: [{ msg: 'priority It must be a number between 0 and ' + minPriority + '.' }] });
+  // }
+
+  // desencolo de la cola de prioridad de mensajes tantos mensajes como dice num
+  // extraemos los mensajes del principio de la cola, los más antiguos
+  let returnMsg: any = [];
+  let msgRes = "";
+  if (priorityMsgQueues || expirationMsgQueue) {
+    if (priority > 0) {
+      returnMsg = priorityMsgQueues[priority - 1].splice(0, numMsgs);
+      console.log('Dequeue', numMsgs, 'items from Q', priority, '. Remaining ', priorityMsgQueues[priority - 1].length, ' messages in the queue.');
+      msgRes = "Extract from Q" + priority;
+    } else {
+      // prioridad 0 indica la cola de expiración
+      returnMsg = expirationMsgQueue.splice(0, numMsgs);
+      console.log('Dequeue', numMsgs, 'items from EXPIRATION queue. Remainingn ', expirationMsgQueue.length, ' queue items.');
+      msgRes = "Extract from EXPIRATION";
     }
 
-    // desencolo de la cola de prioridad de mensajes tantos mensajes como dice num
-    // extraemos los mensajes del principio de la cola, los más antiguos
-    let returnMsg: any = [];
-    let msgRes = "";
-    if (priorityMsgQueues || expirationMsgQueue) {
-      if (priority > 0) {
-        returnMsg = priorityMsgQueues[priority - 1].splice(0, numMsgs);
-        console.log('Dequeue', numMsgs, 'items from Q', priority, '. Remaining ', priorityMsgQueues[priority - 1].length, ' messages in the queue.');
-        msgRes = "Extract from Q" + priority;
-      } else {
-        // prioridad 0 indica la cola de expiración
-        returnMsg = expirationMsgQueue.splice(0, numMsgs);
-        console.log('Dequeue', numMsgs, 'items from EXPIRATION queue. Remainingn ', expirationMsgQueue.length, ' queue items.');
-        msgRes = "Extract from EXPIRATION";
-      }
-
-    }
-
-    //""Timestamp; Pedidos por  Dispatcher; Leidos por Dispatcher; Cola Leida; Quedan Cola P1; Quedan Cola P2; Quedan Cola P3; Quedan Cola P4, Quedan Cola Expirados""
-    let msg = "";
-    for (let i = maxPriority; i <= minPriority; i++) {
-      msg += "Remaining Q " + priorityMsgQueues[i - 1].length + ";";
-    }
-
-    writeLog(categoriserFilesNames.fileNameREST, numMsgs + ";" + returnMsg.length + ";" + priority + ";" + msg + expirationMsgQueue.length, true)
-
-    dispatcherPort.postMessage({
-      type: 'MESSAGES_PULLED',
-      code: 200,
-      messageId: messageId,
-      payload: {
-        messageInfo: 'Pull messages to Dispatcher',
-        message: msgRes,
-        data: 'num: ' + numMsgs + ' priority:' + priority,
-        messagesExtracted: returnMsg,
-        numMsgExtracted: returnMsg.length
-      }
-    });
-  } catch (error) {
-    // dispatcherPort.postMessage({
-    //   type: 'MESSAGES_PULLED',
-    //   code: 400,
-    //   messageId: messageId,
-    //   payload: {
-    //     messageInfo: 'Error pulling messages to Dispatcher',
-    //     message: []
-    //   }
-    // });
   }
+
+  //""Timestamp; Pedidos por  Dispatcher; Leidos por Dispatcher; Cola Leida; Quedan Cola P1; Quedan Cola P2; Quedan Cola P3; Quedan Cola P4, Quedan Cola Expirados""
+  let msg = "";
+  for (let i = maxPriority; i <= minPriority; i++) {
+    msg += "Remaining Q " + priorityMsgQueues[i - 1].length + ";";
+  }
+
+  writeLog(categoriserFilesNames.fileNameREST, numMsgs + ";" + returnMsg.length + ";" + priority + ";" + msg + expirationMsgQueue.length, true)
+
+  dispatcherPort.postMessage({
+    type: 'MESSAGES_PULLED',
+    code: 200,
+    messageId: messageId,
+    payload: {
+      messageInfo: 'Pull messages to Dispatcher',
+      message: msgRes,
+      data: 'num: ' + numMsgs + ' priority:' + priority,
+      messagesExtracted: returnMsg,
+      numMsgExtracted: returnMsg.length
+    }
+  });
 }
 
 const launch = () => {
@@ -398,7 +386,6 @@ const updateConfig = (newConfig: any) => {
   config = { ...config, ...newConfig };
 
   if (Object.keys(newConfig).includes('minPriority')) updateCategoriserStructure()
-  // console.log('Nuevo objeto config en el categoriser:', config);
 }
 
 const stopLaunch = (endSimulation: boolean = false) => {
