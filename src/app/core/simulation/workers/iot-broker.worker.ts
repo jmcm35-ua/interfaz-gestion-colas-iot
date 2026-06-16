@@ -276,19 +276,6 @@ const stopLaunch = (endSimulation: boolean = false) => {
   }
 }
 
-// const togglePlayPause = async (simulationIsRuning: boolean) => {
-//   isRuning = simulationIsRuning; // El estado se gestiona desde el servicio de simulacion
-//   if (!isRuning) {
-//     stopLaunch();
-
-//   }
-//   else {
-//     // await initializeWriters(false);
-//     genMsg();
-
-//   }
-//   console.log(`Broker Worker: Sistema ${isRuning ? 'REANUDADO' : 'PAUSADO'}`);
-// }
 
 const togglePlayPause = async (simulationIsRuning: boolean) => {
   // Guardamos el estado ANTERIOR antes de actualizarlo

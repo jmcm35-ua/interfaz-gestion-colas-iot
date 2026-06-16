@@ -48,7 +48,7 @@ let config: CategoriserConfig = {
 
 let iniTimestamp = Date.now(); // Cuando se inicia el sistema
 let totalPausedTime = 0; // Acumula el tiempo que pasamos en pausa
-let pauseStartTimestamp = 0;
+let pauseStartTimestamp = 0; // Guarda el instante en el que se produce la pausa
 
 let isRuning = false;
 let classifyTimeout: any;

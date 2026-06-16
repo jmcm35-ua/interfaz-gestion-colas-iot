@@ -11,15 +11,14 @@ export class RequestManager {
      * @param {string} responseType - El 'type' que el servidor usará para responder.
      */
     constructor(public port: MessagePort, private responseType: string) {
-        // El "oído" interno: Solo despierta a quien hizo un 'request'
         this.port.onmessage = (event) => {
             const { type, messageId, payload } = event.data;
 
-            // Si el sobre que llega es una respuesta y tenemos el ticket...
+            // Si el sobre que llega es una respuesta y tenemos al promesa...
             if (type === this.responseType && this.pendingRequests.has(messageId)) {
                 const resolve = this.pendingRequests.get(messageId)!;
                 resolve(payload); // Entregamos el contenido
-                this.pendingRequests.delete(messageId); // Tiramos el ticket usado
+                this.pendingRequests.delete(messageId); // Borramos la promesa resuelta
             }
         };
     }

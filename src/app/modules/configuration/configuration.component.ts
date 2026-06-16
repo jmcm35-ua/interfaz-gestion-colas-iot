@@ -28,7 +28,7 @@ export class ConfigurationComponent implements OnInit, OnDestroy {
 
   configForm: UntypedFormGroup | undefined;
 
-  lastConfiguration: any = { // Aqu'i guardamos el estado de la ultima configuracion mandada al servicio. Si no han habido cambios en una, no se envia
+  lastConfiguration: any = { // Aqui guardamos el estado de la ultima configuracion mandada al servicio. Si no han habido cambios en una, no se envia
     iotBroker: [],
     categoriser: [],
     dispatcher: [],
@@ -213,7 +213,9 @@ export class ConfigurationComponent implements OnInit, OnDestroy {
   }
 
   checkValue(event: any, variable: Variables, configureSimulation: boolean = true) {
-    let value = Number(event);
+    if (!event.target.value) return;
+
+    let value = Number(event.target.value);
     const minValue = variable.minimum ?? -1;
     const maxValue = variable.maximum ?? -1;
 

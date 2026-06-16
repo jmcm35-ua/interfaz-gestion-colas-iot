@@ -12,6 +12,8 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 
 Chart.register(...registerables);
 
+type ChartName = 'broker' | 'categoriser' | 'consumer' | 'expiredBar';
+
 @Component({
   selector: 'app-dashboard',
   standalone: true,
@@ -47,12 +49,23 @@ export class DashboardComponent implements OnInit, OnDestroy {
     '#d1d5db'
   ];
 
+  nameImages = {
+    broker: 'Dispersion-Produccion',
+    categoriser: 'Procesamiento-Prioridad',
+    consumer: 'Distribucion-Carga',
+    expiredBar: 'Validos-Expirados-Prioridad'
+  } as const;
+
+  getImageName(chart: keyof typeof this.nameImages) {
+    return this.nameImages[chart];
+  }
+
   // Referencias a contenedores
   @ViewChild('scatterBroker') scatterRef!: ElementRef;
   @ViewChild('pieCategoriser') pieRef!: ElementRef;
   @ViewChild('lineConsumer') lineRef!: ElementRef;
-  @ViewChild('expiredBar') barRef !: ElementRef;
-  @ViewChild('totalMessages') totalMessages !: ElementRef;
+  @ViewChild('expiredBar') barRef!: ElementRef;
+  @ViewChild('totalMessages') totalMessages!: ElementRef;
 
   dataQueuesTime: number[] = [];
   constructor(private simulationService: SimulationService) { }
@@ -73,17 +86,21 @@ export class DashboardComponent implements OnInit, OnDestroy {
     });
   }
 
-  downloadChart(chart: string) {
+  // Función para descargar los gráficos
+  downloadChart(chart: ChartName) {
+    if (!this.charts || !this.charts[chart]) return;
+
     const img = this.charts[chart].canvas.toDataURL("img/png");
 
     const downloadLink = document.createElement('a');
     downloadLink.href = img;
-    downloadLink.download = chart + '.png';
+    downloadLink.download = this.getImageName(chart) + '.png';
 
     downloadLink.click();
     console.log(downloadLink)
   }
 
+  // Función para inicializar los gráficos
   private initializeCharts() {
     this.charts['broker'] = new Chart(this.scatterRef.nativeElement, {
       type: 'line',
@@ -187,6 +204,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
     })
   }
 
+  // Función para reiniciar los gráficos
   private resetCharts() {
 
     Object.values(this.charts).forEach(chart => {
@@ -199,6 +217,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
     if (this.dataQueuesTime) this.dataQueuesTime = [];
   }
 
+  // Función para llamar a actualizar a todos los gráficos
   private updateAllCharts(snapshot: WorkerMetricsSnapshot) {
     this.updateScatterChart(snapshot);
     this.updatePieChart(snapshot);
@@ -206,6 +225,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
     this.updateBarChart(snapshot)
   }
 
+  // Función para actualizar el gráfico de barras
   private updateBarChart(snapshot: WorkerMetricsSnapshot) {
     const chart = this.charts['expiredBar'];
     const expiredMessages = snapshot.consumer.messagesExpired;
@@ -224,6 +244,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
     chart.update('none');
   }
 
+  // Función para actuaizar el gráfico "quesito"
   private updatePieChart(snapshot: WorkerMetricsSnapshot) {
     const chart = this.charts['consumer'];
     const lengths = snapshot.consumer.readByPriority;
@@ -245,12 +266,12 @@ export class DashboardComponent implements OnInit, OnDestroy {
 
   private updateLineChart(snapshot: WorkerMetricsSnapshot) {
     const chart = this.charts['categoriser'];
-    const data = snapshot.categoriser.queuesLength; // Supongamos que vienen 'N' elementos
+    const data = snapshot.categoriser.queuesLength; // N colas
 
-    // Total de líneas que necesitamos: Las 'N' colas + 1 de expirados
+    // Total de líneas que necesitamos: N colas + 1 de expirados
     const totalRequiredLines = data.length + 1;
 
-    // 1. Ajuste dinámico de líneas (creación de datasets si no existen)
+    // Creación de datasets si no existen
     if (totalRequiredLines > chart.data.datasets.length) {
       for (let i = chart.data.datasets.length; i < totalRequiredLines; i++) {
         // Si es el índice 0, es Expirados. Si no, restamos 1 para que empiece en Q1, Q2...
@@ -274,7 +295,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
       y: snapshot.categoriser.expirationQueue
     });
 
-    // Actualizamos las lineas de cada cola
+    // Actualizamos las lineas de cada cola de prioridad
     data.forEach((val, idx) => {
       (chart.data.datasets[idx + 1].data as any[]).push({
         x: snapshot.timestamp,
@@ -306,6 +327,8 @@ export class DashboardComponent implements OnInit, OnDestroy {
   }
 
   resetZoom(chart: string) {
+    if (!this.charts || !this.charts[chart]) return;
+
     this.charts[chart].resetZoom();
   }
 

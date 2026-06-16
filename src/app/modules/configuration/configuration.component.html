@@ -74,7 +74,7 @@
                             class="text-secondary text-sm"
                             [name]="variable.name"
                             [ngModel]="variable.value"
-                            (blur)="checkValue($event.target.value, variable)"
+                            (blur)="checkValue($event, variable)"
                             (keydown.enter)="onEnter($event, variable)"
                             >
                     </mat-form-field>
@@ -151,7 +151,7 @@
                             class="text-secondary text-sm"
                             [name]="variable.name"
                             [ngModel]="variable.value"
-                            (blur)="checkValue($event.target.value, variable)"
+                            (blur)="checkValue($event, variable)"
                             (keydown.enter)="onEnter($event, variable)"
                             >
                     </mat-form-field>
@@ -178,7 +178,7 @@
                             class="text-secondary text-sm"
                             [name]="variable.name"
                             [ngModel]="variable.value"
-                            (blur)="checkValue($event.target.value, variable)"
+                            (blur)="checkValue($event, variable)"
                             (keydown.enter)="onEnter($event, variable)"
                             >
                     </mat-form-field>
@@ -205,7 +205,7 @@
                             class="text-secondary text-sm"
                             [name]="variable.name"
                             [ngModel]="variable.value"
-                            (blur)="checkValue($event.target.value, variable)"
+                            (blur)="checkValue($event, variable)"
                             (keydown.enter)="onEnter($event, variable)"
                             >
                     </mat-form-field>
