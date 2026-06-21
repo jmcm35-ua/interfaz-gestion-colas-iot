@@ -1,16 +1,43 @@
 {
-    "name": "fuse-angular",
+    "name": "UCAFlow",
     "version": "19.1.0",
-    "description": "Fuse - Angular Admin Template and Starter Project",
+    "description": "UCAFlow - Gestión de colas IoT",
     "author": "https://themeforest.net/user/srcn",
     "license": "https://themeforest.net/licenses/standard",
     "private": true,
+    "main": "electron/main.js",
+    "build": {
+        "appId": "Simulador.Colas",
+        "productName": "UCAFlow",
+        "files": [
+            "dist/fuse/**/*",
+            "electron/main.js"
+        ],
+        "directories": {
+            "buildResources": "assets"
+        },
+        "mac": {
+            "target": "dmg",
+            "icon": "assets/icons/icon.icns"
+        },
+        "win": {
+            "target": "nsis",
+            "icon": "assets/icons/icon.ico"
+        },
+        "nsis": {
+            "oneClick": false,
+            "allowToChangeInstallationDirectory": true
+        }
+    },
     "scripts": {
         "ng": "ng",
         "start": "ng serve",
         "build": "ng build",
         "watch": "ng build --watch --configuration development",
-        "test": "ng test"
+        "test": "ng test",
+        "electron": "ng build --base-href ./ && electron .",
+        "package": "electron-builder",
+        "build-icons": "electron-icon-builder --input=./src/assets/images/logo/logo.png --output=./assets --flatten"
     },
     "dependencies": {
         "@angular/animations": "17.2.4",
@@ -57,6 +84,9 @@
         "@types/luxon": "3.4.2",
         "autoprefixer": "10.4.18",
         "chroma-js": "2.4.2",
+        "electron": "^42.4.0",
+        "electron-builder": "^26.15.3",
+        "electron-icon-builder": "^2.0.1",
         "jasmine-core": "5.1.2",
         "karma": "6.4.3",
         "karma-chrome-launcher": "3.2.0",

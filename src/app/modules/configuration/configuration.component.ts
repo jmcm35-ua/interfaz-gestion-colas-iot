@@ -107,7 +107,6 @@ export class ConfigurationComponent implements OnInit, OnDestroy {
 
 
   closePanel() {
-    console.log("Closing panel");
     this.close.emit();
   }
 
@@ -116,7 +115,6 @@ export class ConfigurationComponent implements OnInit, OnDestroy {
   }
 
   totalWeight = 1;
-
 
   //************************************************************
   //! Funciones para verificar los datos de la configuracion
@@ -290,8 +288,6 @@ export class ConfigurationComponent implements OnInit, OnDestroy {
   //! Funcion para descargar el archivo JSON de la configuracion
   //************************************************************
   async downloadJSON() {
-
-
     const data = [
       {
         section: 'IoT Broker',
@@ -415,6 +411,8 @@ export class ConfigurationComponent implements OnInit, OnDestroy {
           return;
         }
       });
+    } else {
+      this.loadJSON(file);
     }
   }
 
@@ -424,6 +422,7 @@ export class ConfigurationComponent implements OnInit, OnDestroy {
       try {
         const data = JSON.parse(reader.result as string);
         let sectionVariables: Variables[] = [];
+
         for (const section of data) {
           switch (section.section) {
             case 'IoT Broker':
@@ -445,17 +444,32 @@ export class ConfigurationComponent implements OnInit, OnDestroy {
             if (!variable) return;
 
             if (variable.name === 'weights') {
-              // Esta logica hay que moverla a una función aparte porque se repite y realizar una comprobacion de que todos los valores sumen 1
               variable.value = varFromFile.value;
               this.updateTotal(false);
             } else {
-              this.checkValue(varFromFile.value, variable);
+              if (typeof varFromFile.value === 'number') {
+                const minValue = variable.minimum ?? -1;
+                const maxValue = variable.maximum ?? -1;
+
+                let validatedValue = varFromFile.value;
+                if (minValue !== -99 && validatedValue < minValue) validatedValue = minValue;
+                if (maxValue !== -99 && validatedValue > maxValue) validatedValue = maxValue;
+
+                variable.value = validatedValue;
+              } else {
+                // Si es booleano, se asigna directamente
+                variable.value = varFromFile.value;
+              }
             }
           });
         }
 
-        this.applyConfiguration();
+        this.variablesIotBroker = [...this.variablesIotBroker];
+        this.variablesCategoriser = [...this.variablesCategoriser];
+        this.variablesDispatcher = [...this.variablesDispatcher];
+        this.variablesConsumer = [...this.variablesConsumer];
 
+        this.applyConfiguration();
       } catch (err) {
         console.error("El archivo no es un JSON válido", err);
         alert("El archivo no es un JSON válido");

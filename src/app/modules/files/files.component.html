@@ -5,11 +5,13 @@
         <h2 class="text-lg font-bold text-white">Archivos</h2>
     </div>
 
-    <div [hidden]="files.length === 0" class="flex items-center ml-auto space-x-0.5">
-        <button mat-icon-button (click)="download()" [matTooltip]="tooltip || 'Descargar carpeta'">
-            <mat-icon [svgIcon]="'heroicons_solid:folder-arrow-down'"></mat-icon>
-        </button>
-    </div>
+    @if(files.length > 0){
+        <div class="flex items-center ml-auto space-x-0.5">
+            <button mat-icon-button (click)="download()" [matTooltip]="tooltip || 'Descargar carpeta'">
+                <mat-icon [svgIcon]="'heroicons_solid:folder-arrow-down'"></mat-icon>
+            </button>
+        </div>
+    }
 </div>
 
 <div class="container-files">
