@@ -68,7 +68,7 @@ export class ConfigurationComponent implements OnInit, OnDestroy {
         60000
       ],
       text: 'Tiempo que tarda en expirar cada cola',
-      minimum: 1, maximum: 1000000000, input: true
+      minimum: 100, maximum: 1000000000, input: true
     }
   ]
 
@@ -85,7 +85,7 @@ export class ConfigurationComponent implements OnInit, OnDestroy {
         0.125
       ],
       text: 'Porcentaje de lectura de cada cola',
-      minimum: 0.01, maximum: 1, input: true
+      minimum: 0.00001, maximum: 1, input: true
     }
   ]
 
@@ -221,16 +221,17 @@ export class ConfigurationComponent implements OnInit, OnDestroy {
   }
 
   setPriority(event: any, index: number) {
-    let value = parseFloat(event.target.value);
-    if (isNaN(value) || value < 0) value = 0;
-    if (value > 100) value = 100;
-
     const priVar = this.variablesDispatcher.find(v => v.name === 'powerPriority');
+    let value = parseFloat(event.target.value) / 100;
+    const minValue = priVar?.minimum ?? 0;
+    const maxValue = priVar?.maximum ?? 1;
+
+    value = this.setLimits(value, minValue, maxValue);
+
     if (priVar) {
       const priArray = priVar.value as number[];
-      const decimalValue = value / 100;
-      if (priArray[index] !== decimalValue) {
-        priArray[index] = decimalValue;
+      if (priArray[index] !== value) {
+        priArray[index] = value;
         this.applyConfiguration();
       }
     }
@@ -340,11 +341,12 @@ export class ConfigurationComponent implements OnInit, OnDestroy {
 
     // Determinamos el salto lógico. (Ej: porcentajes saltan de 0.01 en 0.01, el resto de 1 en 1)
     let stepAmount = 1;
-    if (variable.name === 'factorNight' || variable.name === 'powerPriority' || variable.name === 'weights') stepAmount = 0.01;
+    if (variable.name === 'factorNight' || variable.name === 'weights') stepAmount = 0.01;
+    else if (variable.name === 'powerPriority') stepAmount = 0.001;
 
     let newValue = current + (step * stepAmount);
 
-    if (newValue < 1) {
+    if (newValue < 1 && variable.name !== 'powerPriority') {
       newValue = Number(newValue.toFixed(2));
     }
 
@@ -401,7 +403,6 @@ export class ConfigurationComponent implements OnInit, OnDestroy {
   // Si el valor se pasa de los límites, lo coloca en el extremo 
   setLimits(value: number, minValue: number, maxValue: number): number {
     let newValue = 0;
-    console.log(value)
     if (!value || (minValue !== -99 && value < minValue)) {
       newValue = minValue;
     } else if (maxValue !== -99 && value > maxValue) {
@@ -465,6 +466,7 @@ export class ConfigurationComponent implements OnInit, OnDestroy {
     if (hasChanges) {
       // Hacemos una copia limpia para evitar problemas de referencias
       const cleanDelta = JSON.parse(JSON.stringify(configToSend));
+      console.log({ cleanDelta })
       this.simulationService.configureSimulation(cleanDelta);
     }
   }
@@ -621,17 +623,21 @@ export class ConfigurationComponent implements OnInit, OnDestroy {
               this.updateTotal(false);
             } else {
               // El resto verificamos que los valores sean correctos
+              const minValue = variable.minimum ?? -1;
+              const maxValue = variable.maximum ?? -1;
+
               if (typeof varFromFile.value === 'number') {
-                const minValue = variable.minimum ?? -1;
-                const maxValue = variable.maximum ?? -1;
+                // Si es un solo número, le aplicamos el límite directamente
+                variable.value = this.setLimits(varFromFile.value, minValue, maxValue);
 
-                let validatedValue = varFromFile.value;
-                if (minValue !== -99 && validatedValue < minValue) validatedValue = minValue;
-                if (maxValue !== -99 && validatedValue > maxValue) validatedValue = maxValue;
+              } else if (Array.isArray(varFromFile.value)) {
+                // Si es un array, iteramos sobre cada valor con map() y le aplicamos el límite
+                variable.value = varFromFile.value.map((val: number) =>
+                  this.setLimits(val, minValue, maxValue)
+                );
 
-                variable.value = validatedValue;
               } else {
-                // Si es booleano, se asigna directamente
+                // Para booleanos se asignan directamente
                 variable.value = varFromFile.value;
               }
             }
