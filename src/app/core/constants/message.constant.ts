@@ -1,3 +1,4 @@
+// Plantilla para los mensajes
 export const templateMsg = `{
   "name": "as.up.data.forward",
   "time": "**TIME**",

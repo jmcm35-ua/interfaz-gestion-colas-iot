@@ -26,7 +26,7 @@ export class FileStorageManager {
     const encoder = new TextEncoder();
     const buffer = encoder.encode(finalMessage);
 
-    // IMPORTANTE: Obtenemos el tamaño actual y escribimos justo ahí (al final)
+    // Obtenemos el tamaño actual y escribimos justo ahí
     const currentSize = ignoreSize ? 0 : writer.getSize();
     writer.write(buffer, { at: currentSize });
 

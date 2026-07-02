@@ -1,3 +1,4 @@
+// Constantes de los nombre de los ficheros de cada Werb Worker
 export const iotBrokerFilesName = {
     fileNameSummary: 'iot_broker_generation.csv',
     fileNamePathRest: 'iot_broker_REST.csv',

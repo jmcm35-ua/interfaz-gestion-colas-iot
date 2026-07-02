@@ -1,3 +1,4 @@
+// Interfaz para un mensaje
 export interface Message {
     shipment: number,
     id: string,

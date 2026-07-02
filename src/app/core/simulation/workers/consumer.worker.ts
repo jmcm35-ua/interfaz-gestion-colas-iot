@@ -1,8 +1,6 @@
 /// <reference lib="webworker" />
 
-import { templateMsg } from "app/core/constants/message.constant";
 import { Message } from "app/core/types/messages.types";
-import { timestamp } from "rxjs";
 import { FileStorageManager } from "../helpers/FileStorageManager.helper";
 import { consumerFilesNames } from "app/core/constants/files.constant"
 import { FileObject } from "app/core/types/variables.types";
@@ -39,9 +37,9 @@ let totalWaitTime: number[] = []; // Acumulado de tiempo de espera
 let timePerPriority: number[] = []; // Promedio de tiempo de cada cola
 
 let config: ConsumerConfig = {
-  minPriority: 4,  // minima prioridad
+  minPriority: 4,  // Minima prioridad
   timeToReadDispatcher: 1000, // Velocidad de lectura
-  numMessagesToRead: 1000 // mensajes que del dispatcher se sirven al sistema
+  numMessagesToRead: 1000 // Mensajes que del dispatcher se sirven al sistema
 }
 
 let isDebug = false;
@@ -105,12 +103,6 @@ const getDispatcherMessages = async () => {
 const consumeMessages = async () => {
   const { minPriority } = config;
   const { extractedMessages } = await getDispatcherMessages();
-
-
-  // if (!extractedMessages || extractedMessages.length === 0) {
-  //   console.error('Messages could not be obtained from the dispatcher.');
-  //   return;
-  // }
 
   let register = '';
   // Para cada mensaje leido vamos a escribir en el archivo sus datos
@@ -216,8 +208,6 @@ const updateConfig = (newConfig: any) => {
   config = { ...config, ...newConfig };
 
   if (Object.keys(newConfig).includes('minPriority')) updatePriorityMessages()
-
-  console.log('Nuevo objeto config:', config);
 }
 
 const sendMetrics = (idSimulation: number) => {
@@ -252,7 +242,6 @@ addEventListener('message', (event) => {
 
       break;
 
-    // ToDo: Incluir la funcionalidad para STOP, PAUSE y CONFIGURE
     case 'STOP':
       stopLaunch(true);
       console.log('CONSUMER Worker: Sistema DETENIDO');

@@ -1,12 +1,11 @@
 
 <div class="absolute inset-0 flex flex-col min-w-0 overflow-hidden bg-transparent">
 
-    <mat-drawer-container class="flex-auto h-full">
+    <mat-drawer-container class="h-full flex-auto">
 
         <!-- Drawer -->
         <mat-drawer
-          style="width: 300px;"
-            
+            style="width: 30rem"
             [autoFocus]="false"
             [mode]="drawerMode"
             [opened]="drawerOpened"
@@ -78,7 +77,7 @@
                         <app-files 
                             [hidden]="!showFiles"
                             #filesPanel
-                            class="absolute right-0 mt-3 z-50 w-80 shadow-2xl rounded-2xl border border-slate-200 dark:border-slate-700 bg-card overflow-hidden transition-all">
+                            class="absolute right-0 mt-3 z-50 w-[30em] shadow-2xl rounded-2xl border border-slate-200 dark:border-slate-700 bg-card overflow-hidden transition-all">
                         </app-files>
                     </div>
 

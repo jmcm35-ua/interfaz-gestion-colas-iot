@@ -32,11 +32,9 @@ let pauseStartTimestamp = 0;
 // Variable que gestiona si está en funcionamiento el worker
 let isRuning: boolean = false;
 
-// Controla
 let readAndSortTimeout: any;
 
 // Variables internas del worker
-let powerPriority: number[] = [];
 let msgPerPriority: number[] = [];
 let sortPriorityQueue: Message[] = [];
 
@@ -45,6 +43,7 @@ let config: DispatcherConfig = {
   maxSortQueue: -1,
   numMessages: 1000,
   timeToReadCategoriser: 1000,
+  powerPriority: [1, 0.5, 0.25, 0.125],
   minPriority: 4
 }
 
@@ -70,16 +69,16 @@ const getSimulationTime = (): number => {
   return Date.now() - iniTimestamp - totalPausedTime;
 };
 
-// Cramos el array de powerPriority dando más prioridad a la cola 1, la mitad a la 2, la mitad a la 3... y luego convertimos eso en mensjaes de numMessages
+// Esta función calcula la potencia total. Luego la normaliza y extrae la cantidad correspondiente de mensaje de numMessages
 const configurePowerPriority = () => {
-  const { minPriority } = config;
+  const { minPriority, powerPriority } = config;
   let totalPower = 0;
-  powerPriority = [];
+  // powerPriority = [];
 
-  powerPriority.push(1)
+  // powerPriority.push(1)
   totalPower += 1;
   for (let i = 1; i < minPriority; i++) {
-    powerPriority.push(powerPriority[i - 1] / 2);
+    // powerPriority.push(powerPriority[i - 1] / 2);
     totalPower += powerPriority[i];
   }
   console.log("Power Priority: ", powerPriority);
@@ -87,7 +86,7 @@ const configurePowerPriority = () => {
 }
 
 const configureMsgPerPriority = () => {
-  const { numMessages, minPriority } = config;
+  const { numMessages, minPriority, powerPriority } = config;
 
   msgPerPriority = [];
 
@@ -105,13 +104,13 @@ const configureMsgPerPriority = () => {
 
 
 /****
- * Función que lee de cada cola, en función del power que tiene definido
- * y mete los mensajes en la cola priorizada
- * si lee menos mensajes de los solicitados, acumula a la siguiente cola el número de mensajes
- * y si quedan mensajes, lee de la de expirados
- */
+  * Función que lee de cada cola, en función del power que tiene definido
+  * y mete los mensajes en la cola priorizada
+  * si lee menos mensajes de los solicitados, acumula a la siguiente cola el número de mensajes
+  * y si quedan mensajes, lee de la de expirados
+*/
 const readAndSort = async () => {
-  const { minPriority, maxSortQueue } = config;
+  const { minPriority, maxSortQueue, powerPriority } = config;
   let totalRead = 0;
   let remaining = 0;
   let reg = "";
@@ -133,7 +132,9 @@ const readAndSort = async () => {
     if (!data) {
       console.error("It has not been possible to read from the Categoriser");
       return;
-    }        // Calculamos si ha sobrado potencia
+    }
+
+    // Calculamos si ha sobrado potencia
     const { numMsgExtracted, messagesExtracted } = data;
 
     reg += (i + 1) + ";" + powerPriority[i] + ";" + msgPerPriority[i] + ";" + remaining + ";" + numMsgExtracted + ";";
@@ -154,7 +155,7 @@ const readAndSort = async () => {
     }
   }
 
-  // si han quedado en remaining mensajes por leer, los leemos de la cola de expirados
+  // Si han quedado en remaining mensajes por leer, los leemos de la cola de expirados
   let dataExp;
   if (remaining > 0) {
     dataExp = await getClassifierMessage(remaining, 0);
@@ -208,7 +209,6 @@ const updateConfig = (newConfig: any) => {
   config = { ...config, ...newConfig };
 
   if (Object.keys(newConfig).includes('minPriority')) configureMsgPerPriority()
-  // console.log('Nuevo objeto config en el categoriser:', config);
 }
 
 const launch = () => {
@@ -240,7 +240,6 @@ const stopLaunch = (endSimulation: boolean = false) => {
   if (endSimulation) {
     storageFiles.closeAll();
     // Reiniciamos los valores
-    powerPriority = [];
     msgPerPriority = [];
     sortPriorityQueue = [];
   }
@@ -259,7 +258,6 @@ const togglePlayPause = async (simulationIsRuning: boolean) => {
     totalPausedTime += Date.now() - pauseStartTimestamp;
     launch();
   }
-  // Corregido también el texto del log que decía CATEGORISER en vez de DISPATCHER
   console.log(`DISPATCHER Worker: Sistema ${isRuning ? 'REANUDADO' : 'PAUSADO'}`);
 }
 

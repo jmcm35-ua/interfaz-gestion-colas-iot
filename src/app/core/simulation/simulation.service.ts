@@ -43,19 +43,15 @@ export class SimulationService {
     this.setupGlobalMetricsCollector();
   }
 
-  //!POSIBLE FALLO DETECTADO
-  // tODO: SI SE PONE EN PAUSA, HABRIA QUE ACTUALIZAR EL TIEMPO INICIAL PARA QUE NO SE ROMPA LA REPODUCCION O ALGO ENTIENDO
 
   private initWorkers() {
-    // Declaración explícita para que el bundler (Webpack/Esbuild) los reconozca
+    // Creación de los Web Workers
     this.workers = {
       iotBroker: new Worker(new URL('./workers/iot-broker.worker', import.meta.url)),
       categoriser: new Worker(new URL('./workers/categoriser.worker', import.meta.url)),
       dispatcher: new Worker(new URL('./workers/dispatcher.worker', import.meta.url)),
       consumer: new Worker(new URL('./workers/consumer.worker', import.meta.url))
     };
-
-    // console.log("Workers inicializados correctamente");
 
     // Establecer canales
     this.createChannel(this.workers.iotBroker, this.workers.categoriser);
@@ -85,10 +81,9 @@ export class SimulationService {
       // Si esta corriendo el reloj (intervalo cada segundo)
       this.broadcast('GET_METRICS', this.idSimulation);
 
-
       // SI existe nuestro recolector de metricas, configuramos el observable para que el componente dashboard reciba la actualización
       if (Object.keys(this.collectedMetrics).length > 0) {
-        const timestamp = this.collectedMetrics['iotBroker']?.timestamp || 0; // ¿ESTO HACE FALTA?
+        const timestamp = this.collectedMetrics['iotBroker']?.timestamp || 0;
         const snapshot: WorkerMetricsSnapshot = {
           timestamp: timestamp,
           iotBroker: {
@@ -184,7 +179,6 @@ export class SimulationService {
 
       if (newConfig?.dispatcher || changePriorityQueues) {
         const configToSendDispatcher = newConfig?.dispatcher ? this.prepareObjectConfig(newConfig.dispatcher) : {};
-
         if (changePriorityQueues) {
           configToSendDispatcher['minPriority'] = this.lastPriorityLength;
         }
@@ -256,7 +250,6 @@ export class SimulationService {
 
       // Cerramos el archivo de escritura para asegurar que estos se escriben en el disco
       await writable.close();
-      // console.log('Archivo movido con éxito al disco local');
 
     } catch (err: any) {
       if (err.name === 'AbortError') return;
@@ -269,7 +262,7 @@ export class SimulationService {
    * - Pide el archivo al worker.
    * - Recibe el FileHandle.
    * - Extrae el File evitando bloquear la RAM.
-   */
+  */
   private processWorkerFileResponse(worker: Worker, name: string): Promise<{ filename: string, content: Blob }> {
     return new Promise((resolve) => {
       // Definimos el listener de forma interna para poder referenciarlo al eliminarlo
@@ -329,7 +322,7 @@ export class SimulationService {
   }
 
   startSimulation = () => {
-    // Iniciamos el worker
+    // Iniciamos la simulación
     try {
 
       this.idSimulation++;

@@ -1,4 +1,4 @@
-
+// Interfaz para los parametros
 export interface Variables {    // Si el mínimo o máximo son -1, se ignoran
     name: string;               // Nombre con la que se le identifica en el Worker
     value: number | number[];   // Valor actual
@@ -8,6 +8,7 @@ export interface Variables {    // Si el mínimo o máximo son -1, se ignoran
     input: boolean              // Si es editable
 };
 
+// Interfaz para los archivos
 export interface FileObject {
     name: string;
     header: string;

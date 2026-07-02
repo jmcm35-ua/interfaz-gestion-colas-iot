@@ -10,19 +10,17 @@
         "appId": "Simulador.Colas",
         "productName": "UCAFlow",
         "files": [
-            "dist/fuse/**/*",
+            "dist/UCAFlow/**/*",
             "electron/main.js"
         ],
         "directories": {
             "buildResources": "assets"
         },
         "mac": {
-            "target": "dmg",
-            "icon": "assets/icons/icon.icns"
+            "target": "dmg"
         },
         "win": {
-            "target": "nsis",
-            "icon": "assets/icons/icon.ico"
+            "target": "nsis"
         },
         "nsis": {
             "oneClick": false,
@@ -35,9 +33,9 @@
         "build": "ng build",
         "watch": "ng build --watch --configuration development",
         "test": "ng test",
+        "build-icons": "electron-icon-builder --input=./src/assets/images/logo/logo.png --output=./assets --flatten",
         "electron": "ng build --base-href ./ && electron .",
-        "package": "electron-builder",
-        "build-icons": "electron-icon-builder --input=./src/assets/images/logo/logo.png --output=./assets --flatten"
+        "package": "ng build --base-href ./ && electron-builder"
     },
     "dependencies": {
         "@angular/animations": "17.2.4",
