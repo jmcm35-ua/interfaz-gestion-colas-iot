@@ -4,7 +4,7 @@ import { Message } from "./messages.types";
 export interface IoTBrokerConfig {
     maxMsg: number;
     minMsg: number;
-    changeDayNight: boolean;
+    changeDayNight: number;
     factorNight: number;
     maxTimeToGenerateMsg: number;
     maxQueueMsg: number;

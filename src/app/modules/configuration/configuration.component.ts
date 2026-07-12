@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { Component, EventEmitter, Input, OnDestroy, OnInit, Output } from '@angular/core';
+import { ChangeDetectionStrategy, ChangeDetectorRef, Component, EventEmitter, Input, OnDestroy, OnInit, Output } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatFormFieldModule } from '@angular/material/form-field';
@@ -37,9 +37,9 @@ export class ConfigurationComponent implements OnInit, OnDestroy {
   };
 
   variablesIotBroker: Variables[] = [
-    { name: 'maxMsg', value: 1000, text: 'Máximo de mensajes por remesa', minimum: 1, maximum: 10000, input: true },
-    { name: 'minMsg', value: 100, text: 'Mínimo de mensajes por remesa', minimum: 1, maximum: 10000, input: true },
-    { name: 'changeDayNight', value: 1, text: 'Ciclos día y noche', minimum: -1, maximum: -1, input: false },
+    { name: 'minMsg', value: 100, text: 'Mínimo de mensajes por remesa', minimum: 1, maximum: 100000, input: true },
+    { name: 'maxMsg', value: 1000, text: 'Máximo de mensajes por remesa', minimum: 1, maximum: 100000, input: true },
+    { name: 'changeDayNight', value: 500, text: 'Ciclos día y noche', minimum: 0, maximum: 10000000, input: true },
     { name: 'factorNight', value: 0.2, text: 'Factor noche', minimum: 0, maximum: 1, input: true },
     { name: 'maxTimeToGenerateMsg', value: 1000, text: 'Tiempo máximo para generar una remesa (ms)', minimum: 100, maximum: 10000000, input: true },
     { name: 'maxQueueMsg', value: -1, text: 'Mensajes en la cola para depuración', minimum: -1, maximum: 1000000, input: true },
@@ -106,6 +106,7 @@ export class ConfigurationComponent implements OnInit, OnDestroy {
 
   constructor(
     private _fuseConfirmationService: FuseConfirmationService,
+    private cdr: ChangeDetectorRef,
     private simulationService: SimulationService // Inyectamos el servicio del simulador
   ) { }
 
@@ -122,6 +123,7 @@ export class ConfigurationComponent implements OnInit, OnDestroy {
     // Nos suscribimos a los cambios de la variable
     this.subToInitalizedSim = this.simulationService.isInitialized$.subscribe(isInit => {
       this.simulationRunning = isInit;
+      this.cdr.markForCheck();
     });
   }
 
@@ -258,7 +260,7 @@ export class ConfigurationComponent implements OnInit, OnDestroy {
       .map(q => Number(this.onWeightValue(q)))
       .reduce((a, b) => a + b, 0);
 
-    if (this.totalWeight !== 100 && configureSimulation) this.applyConfiguration();
+    if (this.totalWeight === 100 && configureSimulation) this.applyConfiguration();
   }
 
   // Saca el porcentaje de un peso
@@ -324,7 +326,6 @@ export class ConfigurationComponent implements OnInit, OnDestroy {
     clearTimeout(this.stepTimeout);
     clearInterval(this.stepInterval);
 
-    this.applyConfiguration();
   }
 
   // Función para aumentar o disminuir el valor del input
@@ -466,7 +467,6 @@ export class ConfigurationComponent implements OnInit, OnDestroy {
     if (hasChanges) {
       // Hacemos una copia limpia para evitar problemas de referencias
       const cleanDelta = JSON.parse(JSON.stringify(configToSend));
-      console.log({ cleanDelta })
       this.simulationService.configureSimulation(cleanDelta);
     }
   }

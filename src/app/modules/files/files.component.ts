@@ -25,6 +25,7 @@ export class FilesComponent {
     this.subToInitalizedSim = this.simulationService.isInitialized$.subscribe(isInit => {
 
       if (isInit) {
+        this.files = [];
         this.simulationService.fileWorkerMap.forEach((worker, fileName) => {
           this.files.push({ name: fileName });
         });

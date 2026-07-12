@@ -33,7 +33,7 @@
                 <div class="grid grid-cols-[repeat(auto-fit,minmax(10rem,1fr))] gap-4 w-full">
                     @for (variable of variablesIotBroker; track $index) {
                         
-                        <div class="flex-auto group relative" *ngIf="variable.input && variable.name !== 'weights' && variable.name !== 'factorNight'">
+                        <div class="flex-auto group relative" *ngIf="variable.input && variable.name !== 'weights'">
                             
                             <mat-form-field class="fuse-mat-dense selector w-full">
                                 <mat-label class="text-sm text-secondary" [title]="variable.text">{{variable.text}}</mat-label>
@@ -81,7 +81,7 @@
 
                             <div class="flex flex-col gap-2 w-full overflow-x-auto">
                                 <div class="grid grid-cols-[4rem_100px_minmax(4rem,1fr)_minmax(4rem,1fr)] justify-center w-full gap-2 px-1">
-                                    <div></div> <div class="text-xs text-secondary font-medium text-center">Peso Producción</div>
+                                    <div></div><div class="text-xs text-secondary font-medium text-center">Peso Producción</div>
                                     <div class="text-xs text-secondary font-medium text-center">T. Expiración</div>
                                     <div class="text-xs text-secondary font-medium text-center">Poder Consumo</div>
                                 </div>
@@ -99,7 +99,7 @@
                                             (ngModelChange)="onChangePercent($event, q)" 
                                             (blur)="onWeightInput($event, i)" 
                                             (keydown.enter)="onEnterWeight($event, i)">
-                                            <div class="absolute left-1 top-1/2 -translate-y-1/2 flex flex-col gap-0.5 opacity-0 group-focus-within:opacity-100 transition-opacity duration-200 z-10">
+                                            <div class="absolute left-1 top-1/2 -translate-y-1/2 flex flex-col gap-0.5 opacity-0 pointer-events-none group-focus-within:opacity-100 group-focus-within:pointer-events-auto transition-opacity duration-200 z-10">
                                                 <button type="button" 
                                                         class="w-5 h-4 flex items-center justify-center text-slate-500 hover:text-primary hover:bg-slate-700/50 rounded transition-colors"
                                                         (mousedown)="startStepping(variable, 1, $event, i)"
@@ -125,7 +125,7 @@
                                             [ngModel]="getExpiration(i)"
                                             (blur)="setExpiration($event, i)"
                                             (keydown.enter)="onEnterGeneric($event)">
-                                            <div class="absolute left-1 top-1/2 -translate-y-1/2 flex flex-col gap-0.5 opacity-0 group-focus-within:opacity-100 transition-opacity duration-200 z-10">
+                                            <div class="absolute left-1 top-1/2 -translate-y-1/2 flex flex-col gap-0.5 opacity-0 pointer-events-none group-focus-within:opacity-100 group-focus-within:pointer-events-auto transition-opacity duration-200 z-10">
                                                 <button type="button" 
                                                         class="w-5 h-4 flex items-center justify-center text-slate-500 hover:text-primary hover:bg-slate-700/50 rounded transition-colors"
                                                         (mousedown)="startStepping(getVariableCategoriser('priorityExpirationTimeQueue'), 1, $event, i)"
@@ -151,7 +151,7 @@
                                             [ngModel]="getPriority(i)"
                                             (blur)="setPriority($event, i)"
                                             (keydown.enter)="onEnterGeneric($event)">
-                                            <div class="absolute left-1 top-1/2 -translate-y-1/2 flex flex-col gap-0.5 opacity-0 group-focus-within:opacity-100 transition-opacity duration-200 z-10">
+                                            <div class="absolute left-1 top-1/2 -translate-y-1/2 flex flex-col gap-0.5 opacity-0 pointer-events-none group-focus-within:opacity-100 group-focus-within:pointer-events-auto transition-opacity duration-200 z-10">
                                                 <button type="button" 
                                                         class="w-5 h-4 flex items-center justify-center text-slate-500 hover:text-primary hover:bg-slate-700/50 rounded transition-colors"
                                                         (mousedown)="startStepping(getVariableDispatcher('powerPriority'), 1, $event, i)"
@@ -181,7 +181,7 @@
                         </div>
 
                         <!-- FACTOR NOCHE -->
-                        <div class="flex w-full" *ngIf="variable.name === 'changeDayNight'">
+                        <!-- <div class="flex w-full" *ngIf="variable.name === 'changeDayNight'">
                             <mat-form-field class="flex-auto fuse-mat-dense selector w-full group">
                                 
                                 <mat-label class="flex items-center justify-start w-full">
@@ -229,7 +229,7 @@
                                     </button>
                                 </div>
                             </mat-form-field>
-                        </div>
+                        </div> -->
 
                     }
                 </div>
@@ -245,7 +245,7 @@
             </div>
 
             <div class="grid grid-cols-[repeat(auto-fit,minmax(10rem,1fr))] gap-4 w-full mb-2 content"  [class.closed]="!isOpen.categoriser">
-                @for(variable of variablesCategoriser; track variable ){
+                @for(variable of variablesCategoriser; track variable.name ){
                     <div class="flex flex-col selector group" >
                         <mat-form-field *ngIf="variable.input && variable.name !== 'priorityExpirationTimeQueue'"
                             class="flex-auto fuse-mat-dense  ">
@@ -291,7 +291,7 @@
             </div>
 
             <div class="grid grid-cols-[repeat(auto-fit,minmax(10rem,1fr))] gap-4 w-full mb-2 content" [class.closed]="!isOpen.dispatcher">
-                @for (variable of variablesDispatcher; track variable) {
+                @for (variable of variablesDispatcher; track variable.name) {
 
                     <div class="flex flex-col selector" >
                         <mat-form-field *ngIf="variable.input && variable.name !== 'powerPriority'"
@@ -338,7 +338,7 @@
             </div>
 
             <div class="grid grid-cols-[repeat(auto-fit,minmax(10rem,1fr))] gap-4 w-full mb-4 content" [class.closed]="!isOpen.consumer">
-                @for (variable of variablesConsumer; track $index) {
+                @for (variable of variablesConsumer; track variable.name) {
 
                     <div class="flex flex-col selector ">
                         <mat-form-field *ngIf="variable.input"

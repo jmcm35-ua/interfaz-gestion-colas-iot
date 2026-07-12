@@ -225,8 +225,8 @@ const runReadAndSortLoop = async () => {
 }
 
 const initilizeDispatcher = async () => {
-  isRuning = true;
   iniTimestamp = Date.now();
+  isRuning = true;
   await storageFiles.init(MY_FILES);
   totalPausedTime = 0;
   pauseStartTimestamp = 0;

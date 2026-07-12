@@ -128,7 +128,7 @@ export class SimulationService {
     });
   }
 
-  // Pasamos del formato recibido {name: 'changeDayNight', value: 1} al siguiente {changeDayNight: true}
+  // Pasamos del formato recibido {name: 'changeDayNight', value: 500} al siguiente {changeDayNight: 500}
   prepareObjectConfig = (newConfig: any[]) => {
     return newConfig.reduce((acc: any, curr: any) => {
       acc[curr.name] = curr.value;

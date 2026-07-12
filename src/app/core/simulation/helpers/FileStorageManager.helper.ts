@@ -63,5 +63,7 @@ export class FileStorageManager {
       w.flush();
       w.close();
     });
+
+    this.writers.clear();
   }
 }

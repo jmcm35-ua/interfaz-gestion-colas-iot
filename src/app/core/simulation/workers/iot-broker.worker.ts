@@ -67,15 +67,13 @@ let pauseStartTimestamp = 0;
 let config: IoTBrokerConfig = {
   maxMsg: 1000,         // Máximo número de mensajes por remesa
   minMsg: 300,          // Mínimo número de mensajes por remesa
-  changeDayNight: true, // Define queremos cambiar entre dia y noche
+  changeDayNight: 500, // Define cada cuantas remesas se cambia de día a noche. SI ES 0 NO SE PRODUCEN CAMBIOS
   factorNight: 0.2,     // Factor para aumentar los mensajes de día
   weights: [0.05, 0.2, 0.30, 0.45],
   maxQueueMsg: -1,      // Controla el número máximo de mensajes en la cola para depuración, -1 indica sin límite
   maxTimeToGenerateMsg: 1000,
   totalMessages: 1000000,
 }
-
-const shipmentChange = 500;  // Cada X remesas cambiamos de día a noche o viceversa
 
 let isDay = true;        // Define si es de dia
 
@@ -134,10 +132,10 @@ const genMsg = () => {
 
   console.log('----------- GENERANDO MENSAJES -----------')
   // Si han pasado el número de remesas para hacer el cambio de ciclo
-  if (changeDayNight && countShipment % shipmentChange === 0) {
+  if (changeDayNight > 0 && countShipment % changeDayNight === 0) {
     isDay = !isDay;
     console.log(`----------- CHANGE TO ${isDay ? 'DAY' : 'NIGHT'} -----------`)
-  } else if (!changeDayNight && !isDay) isDay = true;
+  } else if (changeDayNight === 0 && !isDay) isDay = true;
 
   let newGroupMsgs = 0;
   if (producedMessages > totalMessages) newGroupMsgs = 0; // Si hemos superado el máximo, no generamos más
@@ -146,7 +144,7 @@ const genMsg = () => {
     newGroupMsgs = Math.round((Math.random() * (maxMsg - minMsg))) + minMsg;
 
     // Si es de noche aplicamos la reducción
-    if (changeDayNight && !isDay) newGroupMsgs = Math.round(newGroupMsgs * factorNight);
+    if (changeDayNight > 0 && !isDay) newGroupMsgs = Math.round(newGroupMsgs * factorNight);
   }
 
   totalMessageShipment.push({ time: getSimulationTime() / 1000, total: newGroupMsgs });

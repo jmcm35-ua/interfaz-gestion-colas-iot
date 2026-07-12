@@ -97,7 +97,6 @@ export class DashboardComponent implements OnInit, OnDestroy {
     downloadLink.download = this.getImageName(chart) + '.png';
 
     downloadLink.click();
-    console.log(downloadLink)
   }
 
   // Función para inicializar los gráficos
